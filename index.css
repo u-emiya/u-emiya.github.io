@@ -32,6 +32,20 @@ h1 a:hover {
 	color: #e8f3f9;
 	text-decoration: none;
 }
+.header-nav {
+	margin-top: 0.75em;
+}
+.header-nav a {
+	display: inline-block;
+	margin-right: 1rem;
+	color: #f3e6d2;
+	text-decoration: none;
+	font-weight: bold;
+}
+.header-nav a:hover {
+	color: #e8f3f9;
+	text-decoration: underline;
+}
 .description {
 	line-height: 1.2;
 	color: #f3f2eb;
