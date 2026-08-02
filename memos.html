@@ -45,22 +45,36 @@
         <textarea id="memo-content" rows="6" placeholder="メモを書き込む"></textarea>
       </label>
       <label>
+        タグ（任意）
+        <input type="text" id="memo-tags" placeholder="カンマ区切りで入力 (例: 学習, 仕事)">
+      </label>
+      <label>
         関連リンク（任意）
         <input type="url" id="memo-link" placeholder="https://example.com">
       </label>
       <label>
-        画像（任意）
+        画像（任意・ファイルまたは貼り付け可）
         <input type="file" id="memo-image" accept="image/*">
       </label>
       <div id="memo-image-preview" class="memo-image-preview"></div>
+      <p class="memo-helper">画像は Ctrl+V でも貼り付けできます。</p>
       <button type="submit">メモを保存</button>
     </form>
   </div>
 </section>
 <section class="bookmark-section">
+  <div class="bookmark-box">
+    <h3>タグで絞り込み</h3>
+    <div class="tag-filter">
+      <input type="text" id="memo-tag-filter" placeholder="検索したいタグを入力">
+      <div id="memo-tag-buttons" class="tag-buttons"></div>
+      <button id="clear-memo-filter" type="button">絞り込み解除</button>
+    </div>
+  </div>
+</section>
+<section class="bookmark-section">
   <h3>保存したメモ一覧</h3>
-  <div id="memo-list" class="bookmark-list"></div>
-  <div id="memo-detail" class="memo-detail"></div>
+  <div id="memo-list" class="memo-list"></div>
 </section>
 </div>
 </main>

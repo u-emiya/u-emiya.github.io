@@ -2,15 +2,21 @@ const MEMO_STORAGE_KEY = 'memoItems';
 const memoForm = document.getElementById('memo-form');
 const memoTitleInput = document.getElementById('memo-title');
 const memoContentInput = document.getElementById('memo-content');
+const memoTagsInput = document.getElementById('memo-tags');
 const memoLinkInput = document.getElementById('memo-link');
 const memoImageInput = document.getElementById('memo-image');
 const memoImagePreview = document.getElementById('memo-image-preview');
 const memoListContainer = document.getElementById('memo-list');
-const memoDetailContainer = document.getElementById('memo-detail');
+const memoTagFilterInput = document.getElementById('memo-tag-filter');
+const memoTagButtonsContainer = document.getElementById('memo-tag-buttons');
+const clearMemoFilterButton = document.getElementById('clear-memo-filter');
 
 const memoState = {
-  items: []
+  items: [],
+  filterTags: []
 };
+
+let pendingImageDataUrl = '';
 
 function loadMemoItems() {
   const raw = localStorage.getItem(MEMO_STORAGE_KEY);
@@ -19,6 +25,11 @@ function loadMemoItems() {
   } catch (error) {
     memoState.items = [];
   }
+  memoState.items = memoState.items.map((item) => ({
+    ...item,
+    tags: Array.isArray(item.tags) ? item.tags : [],
+    imageDataUrl: item.imageDataUrl || ''
+  }));
 }
 
 function saveMemoItems() {
@@ -40,6 +51,20 @@ function formatDate(timestamp) {
   return `${date.getFullYear()}/${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getDate()).padStart(2, '0')}`;
 }
 
+function parseTags(value) {
+  return value
+    .split(',')
+    .map((tag) => tag.trim())
+    .filter(Boolean)
+    .reduce((unique, tag) => {
+      const normalized = tag.toLowerCase();
+      if (!unique.some((item) => item.toLowerCase() === normalized)) {
+        unique.push(tag);
+      }
+      return unique;
+    }, []);
+}
+
 function readFileAsDataUrl(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -51,6 +76,7 @@ function readFileAsDataUrl(file) {
 
 function clearMemoImagePreview() {
   memoImagePreview.innerHTML = '';
+  pendingImageDataUrl = '';
 }
 
 function updateMemoImagePreview() {
@@ -60,84 +86,108 @@ function updateMemoImagePreview() {
     return;
   }
 
-  const previewImage = document.createElement('img');
-  previewImage.src = URL.createObjectURL(file);
-  previewImage.alt = '選択した画像';
-  memoImagePreview.innerHTML = '';
-  memoImagePreview.appendChild(previewImage);
+  const reader = new FileReader();
+  reader.onload = () => {
+    pendingImageDataUrl = reader.result;
+    const previewImage = document.createElement('img');
+    previewImage.src = pendingImageDataUrl;
+    previewImage.alt = '選択した画像';
+    memoImagePreview.innerHTML = '';
+    memoImagePreview.appendChild(previewImage);
+  };
+  reader.readAsDataURL(file);
+}
+
+function getFilteredMemoItems() {
+  if (!memoState.filterTags.length) {
+    return memoState.items;
+  }
+  return memoState.items.filter((item) => {
+    const itemTags = item.tags.map((tag) => tag.toLowerCase());
+    return memoState.filterTags.every((filter) => itemTags.includes(filter));
+  });
+}
+
+function getUniqueMemoTags() {
+  const tags = memoState.items.flatMap((item) => item.tags);
+  const unique = [];
+  tags.forEach((tag) => {
+    const normalized = tag.toLowerCase();
+    if (!unique.some((item) => item.toLowerCase() === normalized)) {
+      unique.push(tag);
+    }
+  });
+  return unique.sort((a, b) => a.localeCompare(b, 'ja'));
+}
+
+function renderTagButtons() {
+  memoTagButtonsContainer.innerHTML = '';
+  const uniqueTags = getUniqueMemoTags();
+  if (!uniqueTags.length) {
+    memoTagButtonsContainer.textContent = 'まだタグがありません。';
+    return;
+  }
+  uniqueTags.forEach((tag) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'tag-button';
+    button.textContent = tag;
+    button.addEventListener('click', () => setMemoFilterTags([tag]));
+    memoTagButtonsContainer.appendChild(button);
+  });
+}
+
+function setMemoFilterTags(tags) {
+  memoTagFilterInput.value = tags.join(', ');
+  memoState.filterTags = tags.map((tag) => tag.toLowerCase());
+  renderMemoItems();
 }
 
 function renderMemoItems() {
   memoListContainer.innerHTML = '';
+  const visibleItems = getFilteredMemoItems();
 
-  if (!memoState.items.length) {
+  if (!visibleItems.length) {
     const emptyMessage = document.createElement('div');
     emptyMessage.className = 'bookmark-empty';
-    emptyMessage.textContent = 'まだメモがありません。タイトルと内容を書いて保存してください。';
+    emptyMessage.textContent = memoState.filterTags.length
+      ? '絞り込み条件に一致するメモはありません。'
+      : 'まだメモがありません。タイトルと内容を書いて保存してください。';
     memoListContainer.appendChild(emptyMessage);
     return;
   }
 
-  memoState.items.forEach((item) => {
+  visibleItems.forEach((item) => {
     const itemEl = document.createElement('article');
     itemEl.className = 'memo-item';
     itemEl.innerHTML = `
-      <div class="memo-item-header">
+      <div class="memo-link-card">
         <div>
-          <h4>${escapeHtml(item.title || '無題のメモ')}</h4>
-          <p class="memo-content">${escapeHtml(item.content || '本文はありません。')}</p>
+          <a href="memo-detail.html?id=${item.id}">${escapeHtml(item.title || '無題のメモ')}</a>
+          <div class="memo-tags">${item.tags.map((tag) => `<span class="memo-tag-pill">${escapeHtml(tag)}</span>`).join('')}</div>
         </div>
         <div class="memo-actions">
-          <button class="memo-open" data-id="${item.id}" type="button">ページとして開く</button>
+          <button class="memo-open" data-id="${item.id}" type="button">開く</button>
           <button class="memo-delete" data-id="${item.id}" type="button">削除</button>
         </div>
       </div>
-      ${item.link ? `<p class="memo-link"><a href="${escapeHtml(item.link)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.link)}</a></p>` : ''}
-      ${item.imageDataUrl ? `<img class="memo-image" src="${escapeHtml(item.imageDataUrl)}" alt="${escapeHtml(item.title || '添付画像')}" />` : ''}
       <p class="memo-meta">保存日: ${formatDate(item.created)}</p>
     `;
 
-    itemEl.querySelector('.memo-open').addEventListener('click', () => showMemoDetail(item.id));
+    itemEl.querySelector('.memo-open').addEventListener('click', () => {
+      window.location.href = `memo-detail.html?id=${item.id}`;
+    });
     itemEl.querySelector('.memo-delete').addEventListener('click', () => deleteMemoItem(item.id));
     memoListContainer.appendChild(itemEl);
   });
-}
 
-function showMemoDetail(id) {
-  const item = memoState.items.find((memo) => memo.id === id);
-  if (!item) {
-    memoDetailContainer.innerHTML = '';
-    if (window.location.hash.startsWith('#memo-')) {
-      window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
-    }
-    return;
-  }
-
-  memoDetailContainer.innerHTML = `
-    <div class="memo-detail-card">
-      <h4>${escapeHtml(item.title || '無題のメモ')}</h4>
-      <p class="memo-content">${escapeHtml(item.content || '本文はありません。')}</p>
-      ${item.link ? `<p class="memo-link"><a href="${escapeHtml(item.link)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.link)}</a></p>` : ''}
-      ${item.imageDataUrl ? `<img class="memo-image" src="${escapeHtml(item.imageDataUrl)}" alt="${escapeHtml(item.title || '添付画像')}" />` : ''}
-      <p class="memo-meta">保存日: ${formatDate(item.created)}</p>
-    </div>
-  `;
-
-  const nextHash = `#memo-${id}`;
-  if (window.location.hash !== nextHash) {
-    window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}${nextHash}`);
-  }
-  memoDetailContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  renderTagButtons();
 }
 
 function deleteMemoItem(id) {
   memoState.items = memoState.items.filter((item) => item.id !== id);
   saveMemoItems();
   renderMemoItems();
-  if (window.location.hash === `#memo-${id}`) {
-    memoDetailContainer.innerHTML = '';
-    window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
-  }
 }
 
 async function addMemoItem(event) {
@@ -145,6 +195,7 @@ async function addMemoItem(event) {
 
   const title = memoTitleInput.value.trim();
   const content = memoContentInput.value.trim();
+  const tags = parseTags(memoTagsInput.value);
   const link = memoLinkInput.value.trim();
   const imageFile = memoImageInput.files && memoImageInput.files[0] ? memoImageInput.files[0] : null;
 
@@ -152,8 +203,8 @@ async function addMemoItem(event) {
     return;
   }
 
-  let imageDataUrl = '';
-  if (imageFile) {
+  let imageDataUrl = pendingImageDataUrl;
+  if (!imageDataUrl && imageFile) {
     imageDataUrl = await readFileAsDataUrl(imageFile);
   }
 
@@ -161,6 +212,7 @@ async function addMemoItem(event) {
     id: String(Date.now()),
     title,
     content,
+    tags,
     link,
     imageDataUrl,
     created: Date.now(),
@@ -170,25 +222,51 @@ async function addMemoItem(event) {
   memoForm.reset();
   clearMemoImagePreview();
   renderMemoItems();
-  showMemoDetail(memoState.items[0].id);
+}
+
+function handlePaste(event) {
+  const clipboardItems = event.clipboardData && event.clipboardData.items;
+  if (!clipboardItems) {
+    return;
+  }
+
+  for (const item of clipboardItems) {
+    if (item.kind === 'file' && item.type.startsWith('image/')) {
+      event.preventDefault();
+      const file = item.getAsFile();
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = () => {
+          pendingImageDataUrl = reader.result;
+          memoImagePreview.innerHTML = '';
+          const previewImage = document.createElement('img');
+          previewImage.src = pendingImageDataUrl;
+          previewImage.alt = '貼り付けた画像';
+          memoImagePreview.appendChild(previewImage);
+        };
+        reader.readAsDataURL(file);
+      }
+      return;
+    }
+  }
 }
 
 memoForm.addEventListener('submit', addMemoItem);
+memoForm.addEventListener('paste', handlePaste);
 memoImageInput.addEventListener('change', updateMemoImagePreview);
-
-window.addEventListener('hashchange', () => {
-  const memoId = window.location.hash.replace('#memo-', '');
-  if (memoId) {
-    showMemoDetail(memoId);
-  } else {
-    memoDetailContainer.innerHTML = '';
-  }
+memoTagFilterInput.addEventListener('input', () => {
+  memoState.filterTags = memoTagFilterInput.value
+    .split(',')
+    .map((tag) => tag.trim())
+    .filter(Boolean)
+    .map((tag) => tag.toLowerCase());
+  renderMemoItems();
+});
+clearMemoFilterButton.addEventListener('click', () => {
+  memoTagFilterInput.value = '';
+  memoState.filterTags = [];
+  renderMemoItems();
 });
 
 loadMemoItems();
 renderMemoItems();
-
-const initialMemoId = window.location.hash.replace('#memo-', '');
-if (initialMemoId) {
-  showMemoDetail(initialMemoId);
-}

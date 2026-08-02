@@ -144,6 +144,12 @@ footer {
   resize: vertical;
 }
 
+.memo-helper {
+  margin: 0.4rem 0 0.8rem;
+  color: #666;
+  font-size: 0.95rem;
+}
+
 .memo-image-preview {
   margin-top: 0.5rem;
   min-height: 2rem;
@@ -156,6 +162,11 @@ footer {
   border: 1px solid #ddd;
 }
 
+.memo-list {
+  display: grid;
+  gap: 0.8rem;
+}
+
 .memo-item {
   padding: 1rem;
   border: 1px solid #ddd;
@@ -163,11 +174,21 @@ footer {
   background: #fff;
 }
 
-.memo-item-header {
+.memo-link-card {
   display: flex;
   justify-content: space-between;
   gap: 1rem;
   align-items: flex-start;
+}
+
+.memo-link-card a {
+  color: #214555;
+  text-decoration: none;
+  font-weight: bold;
+}
+
+.memo-link-card a:hover {
+  text-decoration: underline;
 }
 
 .memo-actions {
@@ -176,7 +197,8 @@ footer {
   flex-wrap: wrap;
 }
 
-.memo-actions button {
+.memo-actions button,
+.memo-detail-actions button {
   border: 1px solid #214555;
   background: #fff;
   color: #214555;
@@ -185,15 +207,35 @@ footer {
   cursor: pointer;
 }
 
-.memo-delete {
+.memo-delete,
+.memo-detail-delete {
   border-color: #d33 !important;
   color: #900 !important;
   background: #f7d7d7 !important;
 }
 
+.memo-tags,
+.memo-tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.4rem;
+}
+
+.memo-tag-pill {
+  display: inline-block;
+  padding: 0.3rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid #214555;
+  background: #f4f8fb;
+  color: #214555;
+  font-size: 0.9rem;
+}
+
 .memo-content,
 .memo-link,
-.memo-meta {
+.memo-meta,
+.memo-detail-meta {
   margin: 0.65rem 0;
 }
 
@@ -225,6 +267,12 @@ footer {
   border: 1px solid #c9e2e8;
   border-radius: 8px;
   background: #f4fbfd;
+}
+
+.memo-detail-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
 }
 
 .bookmark-section {
