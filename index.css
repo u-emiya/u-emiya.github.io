@@ -133,6 +133,100 @@ footer {
 	text-align: center;
 }
 
+.memo-form textarea {
+  width: 100%;
+  min-height: 120px;
+  padding: 0.8rem;
+  margin-top: 0.35rem;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  box-sizing: border-box;
+  resize: vertical;
+}
+
+.memo-image-preview {
+  margin-top: 0.5rem;
+  min-height: 2rem;
+}
+
+.memo-image-preview img {
+  display: block;
+  max-height: 220px;
+  border-radius: 8px;
+  border: 1px solid #ddd;
+}
+
+.memo-item {
+  padding: 1rem;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.memo-item-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.memo-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.memo-actions button {
+  border: 1px solid #214555;
+  background: #fff;
+  color: #214555;
+  border-radius: 6px;
+  padding: 0.55rem 0.8rem;
+  cursor: pointer;
+}
+
+.memo-delete {
+  border-color: #d33 !important;
+  color: #900 !important;
+  background: #f7d7d7 !important;
+}
+
+.memo-content,
+.memo-link,
+.memo-meta {
+  margin: 0.65rem 0;
+}
+
+.memo-link a {
+  color: #214555;
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.memo-link a:hover {
+  text-decoration: underline;
+}
+
+.memo-image {
+  display: block;
+  max-height: 240px;
+  width: auto;
+  margin-top: 0.75rem;
+  border-radius: 8px;
+  border: 1px solid #ddd;
+}
+
+.memo-detail {
+  margin-top: 1rem;
+}
+
+.memo-detail-card {
+  padding: 1rem;
+  border: 1px solid #c9e2e8;
+  border-radius: 8px;
+  background: #f4fbfd;
+}
+
 .bookmark-section {
   margin-bottom: 2rem;
 }
