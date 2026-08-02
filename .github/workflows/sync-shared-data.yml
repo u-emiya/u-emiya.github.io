@@ -1,0 +1,36 @@
+name: Sync shared data
+
+on:
+  repository_dispatch:
+    types: [sync-shared-data]
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_SYNC_TOKEN }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Write shared data file
+        env:
+          KIND: ${{ github.event.client_payload.kind }}
+          PAYLOAD: ${{ github.event.client_payload.payload }}
+        run: |
+          mkdir -p HomePage/u-emiya.github.io/shared
+          if [ "$KIND" = "bookmarks" ]; then
+            echo "$PAYLOAD" > HomePage/u-emiya.github.io/shared/bookmarks.json
+          elif [ "$KIND" = "memos" ]; then
+            echo "$PAYLOAD" > HomePage/u-emiya.github.io/shared/memos.json
+          fi
+
+      - name: Commit and push changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add HomePage/u-emiya.github.io/shared/bookmarks.json HomePage/u-emiya.github.io/shared/memos.json
+          git commit -m "Update shared data" || echo "No changes to commit"
+          git push
