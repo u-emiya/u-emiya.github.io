@@ -32,7 +32,7 @@
 <div id="inner">
 <h2>備忘録</h2>
 <p>メモを書き留めたり、関連リンクや画像を添えて管理できます。</p>
-<p>共有URLを送れば、他の人も同じ内容を閲覧できます。</p>
+<p>データはこのブラウザのローカルに保存されます。必要に応じて JSON を書き出し/読み込みできます。</p>
 <section class="bookmark-section">
   <div class="bookmark-box">
     <h3>新しいメモを追加</h3>
@@ -65,9 +65,14 @@
 </section>
 <section class="bookmark-section">
   <div class="bookmark-box">
-    <h3>共有データに同期</h3>
-    <p>このページを開くと、同じ共有データを表示できます。</p>
-    <button id="sync-memo-shared" type="button">共有データに同期</button>
+    <h3>保存データの管理</h3>
+    <p>このブラウザに保存したデータを JSON として書き出したり、別端末から読み込んだりできます。</p>
+    <div class="memo-actions">
+      <button id="export-memos" type="button">JSON を書き出す</button>
+      <button id="import-memos" type="button">JSON を読み込む</button>
+      <button id="clear-memos" type="button">ローカルデータを削除</button>
+    </div>
+    <input type="file" id="memo-import-file" accept="application/json">
   </div>
 </section>
 <section class="bookmark-section">

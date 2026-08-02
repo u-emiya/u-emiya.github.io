@@ -1,64 +1,10 @@
 const MEMO_STORAGE_KEY = 'memoItems';
-const GITHUB_REPO = 'u-emiya/TestProject';
-const GITHUB_BRANCH = 'main';
-const GITHUB_DATA_PATH = 'HomePage/u-emiya.github.io/shared/memos.json';
-const GITHUB_RAW_URL = `https://raw.githubusercontent.com/${GITHUB_REPO}/${GITHUB_BRANCH}/${GITHUB_DATA_PATH}`;
-const GITHUB_DISPATCH_URL = `https://api.github.com/repos/${GITHUB_REPO}/dispatches`;
-const MYSITE_SYNC_TOKEN = window.MYSITE_SYNC_TOKEN || localStorage.getItem('mysiteSyncToken') || '';
 const detailContainer = document.getElementById('memo-detail-view');
 const editFormWrapper = document.getElementById('memo-edit-form-wrapper');
 
 function getMemoIdFromQuery() {
   const params = new URLSearchParams(window.location.search);
   return params.get('id');
-}
-
-async function loadSharedItems() {
-  try {
-    const response = await fetch(GITHUB_RAW_URL, { cache: 'no-store' });
-    if (!response.ok) {
-      throw new Error('共有データの読み込みに失敗しました。');
-    }
-    const data = await response.json();
-    if (Array.isArray(data)) {
-      return data;
-    }
-  } catch (error) {
-    // 共有データが取得できない場合はローカル保存にフォールバックする
-  }
-  return null;
-}
-
-async function saveSharedItems(items) {
-  if (!MYSITE_SYNC_TOKEN) {
-    console.warn('GitHub Actions 用のトークンが未設定です。window.MYSITE_SYNC_TOKEN に設定してください。');
-    return;
-  }
-
-  try {
-    const response = await fetch(GITHUB_DISPATCH_URL, {
-      method: 'POST',
-      headers: {
-        'Accept': 'application/vnd.github+json',
-        'Authorization': `Bearer ${MYSITE_SYNC_TOKEN}`,
-        'Content-Type': 'application/json',
-        'X-GitHub-Api-Version': '2022-11-28'
-      },
-      body: JSON.stringify({
-        event_type: 'sync-shared-data',
-        client_payload: {
-          kind: 'memos',
-          payload: JSON.stringify(items)
-        }
-      }),
-      cache: 'no-store'
-    });
-    if (!response.ok) {
-      throw new Error('共有データの送信に失敗しました。');
-    }
-  } catch (error) {
-    // 共有データの保存に失敗してもローカル保存は残す
-  }
 }
 
 function buildMemoListUrl() {
@@ -85,18 +31,16 @@ function formatDate(timestamp) {
 }
 
 async function loadMemoItems() {
-  const sharedItems = await loadSharedItems();
-  if (sharedItems) {
-    return sharedItems.map((item) => ({
-      ...item,
-      tags: Array.isArray(item.tags) ? item.tags : [],
-      imageDataUrl: item.imageDataUrl || ''
-    }));
-  }
-
   const raw = localStorage.getItem(MEMO_STORAGE_KEY);
   try {
-    return raw ? JSON.parse(raw) : [];
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed)
+      ? parsed.map((item) => ({
+          ...item,
+          tags: Array.isArray(item.tags) ? item.tags : [],
+          imageDataUrl: item.imageDataUrl || ''
+        }))
+      : [];
   } catch (error) {
     return [];
   }
@@ -104,7 +48,6 @@ async function loadMemoItems() {
 
 async function saveMemoItems(items) {
   localStorage.setItem(MEMO_STORAGE_KEY, JSON.stringify(items));
-  await saveSharedItems(items);
 }
 
 async function renderMemoDetail() {

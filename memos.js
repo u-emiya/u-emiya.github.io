@@ -1,10 +1,4 @@
 const MEMO_STORAGE_KEY = 'memoItems';
-const GITHUB_REPO = 'u-emiya/TestProject';
-const GITHUB_BRANCH = 'main';
-const GITHUB_DATA_PATH = 'HomePage/u-emiya.github.io/shared/memos.json';
-const GITHUB_RAW_URL = `https://raw.githubusercontent.com/${GITHUB_REPO}/${GITHUB_BRANCH}/${GITHUB_DATA_PATH}`;
-const GITHUB_DISPATCH_URL = `https://api.github.com/repos/${GITHUB_REPO}/dispatches`;
-const MYSITE_SYNC_TOKEN = window.MYSITE_SYNC_TOKEN || localStorage.getItem('mysiteSyncToken') || '';
 const memoForm = document.getElementById('memo-form');
 const memoTitleInput = document.getElementById('memo-title');
 const memoContentInput = document.getElementById('memo-content');
@@ -16,7 +10,10 @@ const memoListContainer = document.getElementById('memo-list');
 const memoTagFilterInput = document.getElementById('memo-tag-filter');
 const memoTagButtonsContainer = document.getElementById('memo-tag-buttons');
 const clearMemoFilterButton = document.getElementById('clear-memo-filter');
-const syncSharedButton = document.getElementById('sync-memo-shared');
+const exportButton = document.getElementById('export-memos');
+const importButton = document.getElementById('import-memos');
+const clearButton = document.getElementById('clear-memos');
+const importFileInput = document.getElementById('memo-import-file');
 
 const memoState = {
   items: [],
@@ -25,66 +22,64 @@ const memoState = {
 
 let pendingImageDataUrl = '';
 
-async function loadSharedItems() {
-  try {
-    const response = await fetch(GITHUB_RAW_URL, { cache: 'no-store' });
-    if (!response.ok) {
-      throw new Error('共有データの読み込みに失敗しました。');
-    }
-    const data = await response.json();
-    if (Array.isArray(data)) {
-      return data;
-    }
-  } catch (error) {
-    // 共有データが取得できない場合はローカル保存にフォールバックする
-  }
-  return null;
-}
-
-async function saveSharedItems(items) {
-  if (!MYSITE_SYNC_TOKEN) {
-    console.warn('GitHub Actions 用のトークンが未設定です。window.MYSITE_SYNC_TOKEN に設定してください。');
-    return;
-  }
-
-  try {
-    const response = await fetch(GITHUB_DISPATCH_URL, {
-      method: 'POST',
-      headers: {
-        'Accept': 'application/vnd.github+json',
-        'Authorization': `Bearer ${MYSITE_SYNC_TOKEN}`,
-        'Content-Type': 'application/json',
-        'X-GitHub-Api-Version': '2022-11-28'
-      },
-      body: JSON.stringify({
-        event_type: 'sync-shared-data',
-        client_payload: {
-          kind: 'memos',
-          payload: JSON.stringify(items)
-        }
-      }),
-      cache: 'no-store'
-    });
-    if (!response.ok) {
-      throw new Error('共有データの送信に失敗しました。');
-    }
-  } catch (error) {
-    // 共有データの保存に失敗してもローカル保存は残す
-  }
-}
-
 function buildMemoDetailUrl(id) {
   return `memo-detail.html?id=${encodeURIComponent(id)}`;
 }
 
-async function loadMemoItems() {
-  const sharedItems = await loadSharedItems();
-  if (sharedItems) {
-    memoState.items = sharedItems;
+function downloadJson(filename, payload) {
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+
+async function exportMemoItems() {
+  downloadJson('memos.json', memoState.items);
+}
+
+async function importMemoItemsFromFile(file) {
+  if (!file) return;
+
+  try {
+    const text = await file.text();
+    const parsed = JSON.parse(text);
+    if (!Array.isArray(parsed)) {
+      throw new Error('JSON の内容が配列形式ではありません。');
+    }
+
+    memoState.items = parsed.map((item) => ({
+      id: item.id || String(Date.now()),
+      title: item.title || '',
+      content: item.content || '',
+      tags: Array.isArray(item.tags) ? item.tags : [],
+      link: item.link || '',
+      imageDataUrl: item.imageDataUrl || '',
+      created: item.created || Date.now(),
+    }));
+
     localStorage.setItem(MEMO_STORAGE_KEY, JSON.stringify(memoState.items));
+    renderMemoItems();
+    window.alert('データを読み込みました。');
+  } catch (error) {
+    window.alert(`読み込みに失敗しました: ${error.message}`);
+  }
+}
+
+function clearStoredMemoItems() {
+  if (!window.confirm('ローカルデータを削除しますか？')) {
     return;
   }
+  memoState.items = [];
+  localStorage.setItem(MEMO_STORAGE_KEY, JSON.stringify(memoState.items));
+  renderMemoItems();
+}
 
+async function loadMemoItems() {
   const raw = localStorage.getItem(MEMO_STORAGE_KEY);
   try {
     memoState.items = raw ? JSON.parse(raw) : [];
@@ -98,9 +93,9 @@ async function loadMemoItems() {
   }));
 }
 
-async function saveMemoItems() {
+async function saveMemoItems(items = memoState.items) {
+  memoState.items = items;
   localStorage.setItem(MEMO_STORAGE_KEY, JSON.stringify(memoState.items));
-  await saveSharedItems(memoState.items);
 }
 
 function escapeHtml(value) {
@@ -336,6 +331,53 @@ clearMemoFilterButton.addEventListener('click', () => {
   memoState.filterTags = [];
   renderMemoItems();
 });
+
+if (exportButton) {
+  exportButton.addEventListener('click', () => {
+    void exportMemoItems();
+  });
+}
+
+if (importButton) {
+  importButton.addEventListener('click', () => {
+    if (importFileInput) {
+      importFileInput.click();
+    }
+  });
+}
+
+if (importFileInput) {
+  importFileInput.addEventListener('change', (event) => {
+    const file = event.target.files && event.target.files[0];
+    if (file) {
+      void importMemoItemsFromFile(file);
+    }
+    event.target.value = '';
+  });
+}
+
+if (clearButton) {
+  clearButton.addEventListener('click', () => {
+    clearStoredMemoItems();
+  });
+}
+
+if (saveSyncTokenButton) {
+  saveSyncTokenButton.addEventListener('click', () => {
+    saveSyncToken();
+    window.alert('トークンを保存しました。');
+  });
+}
+
+if (clearSyncTokenButton) {
+  clearSyncTokenButton.addEventListener('click', () => {
+    if (syncTokenInput) {
+      syncTokenInput.value = '';
+    }
+    saveSyncToken();
+    window.alert('トークンを削除しました。');
+  });
+}
 
 if (syncSharedButton) {
   syncSharedButton.addEventListener('click', async () => {

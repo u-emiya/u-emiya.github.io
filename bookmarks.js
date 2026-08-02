@@ -1,10 +1,4 @@
 const STORAGE_KEY = 'bookmarkItems';
-const GITHUB_REPO = 'u-emiya/TestProject';
-const GITHUB_BRANCH = 'main';
-const GITHUB_DATA_PATH = 'HomePage/u-emiya.github.io/shared/bookmarks.json';
-const GITHUB_RAW_URL = `https://raw.githubusercontent.com/${GITHUB_REPO}/${GITHUB_BRANCH}/${GITHUB_DATA_PATH}`;
-const GITHUB_DISPATCH_URL = `https://api.github.com/repos/${GITHUB_REPO}/dispatches`;
-const MYSITE_SYNC_TOKEN = window.MYSITE_SYNC_TOKEN || localStorage.getItem('mysiteSyncToken') || '';
 const form = document.getElementById('bookmark-form');
 const urlInput = document.getElementById('bookmark-url');
 const titleInput = document.getElementById('bookmark-title');
@@ -13,81 +7,80 @@ const listContainer = document.getElementById('bookmark-list');
 const tagButtonsContainer = document.getElementById('tag-buttons');
 const filterInput = document.getElementById('tag-filter-input');
 const clearFilterButton = document.getElementById('clear-filter');
-const syncSharedButton = document.getElementById('sync-bookmark-shared');
+const exportButton = document.getElementById('export-bookmarks');
+const importButton = document.getElementById('import-bookmarks');
+const clearButton = document.getElementById('clear-bookmarks');
+const importFileInput = document.getElementById('bookmark-import-file');
 
 const state = {
   items: [],
   filterTags: []
 };
 
-async function loadSharedItems() {
-  try {
-    const response = await fetch(GITHUB_RAW_URL, { cache: 'no-store' });
-    if (!response.ok) {
-      throw new Error('共有データの読み込みに失敗しました。');
-    }
-    const data = await response.json();
-    if (Array.isArray(data)) {
-      return data;
-    }
-  } catch (error) {
-    // 共有データが取得できない場合はローカル保存にフォールバックする
-  }
-  return null;
+function saveItems(items = state.items) {
+  state.items = items;
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state.items));
 }
 
-async function saveSharedItems(items) {
-  if (!MYSITE_SYNC_TOKEN) {
-    console.warn('GitHub Actions 用のトークンが未設定です。window.MYSITE_SYNC_TOKEN に設定してください。');
-    return;
-  }
+function downloadJson(filename, payload) {
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+
+async function exportItems() {
+  downloadJson('bookmarks.json', state.items);
+}
+
+async function importItemsFromFile(file) {
+  if (!file) return;
 
   try {
-    const response = await fetch(GITHUB_DISPATCH_URL, {
-      method: 'POST',
-      headers: {
-        'Accept': 'application/vnd.github+json',
-        'Authorization': `Bearer ${MYSITE_SYNC_TOKEN}`,
-        'Content-Type': 'application/json',
-        'X-GitHub-Api-Version': '2022-11-28'
-      },
-      body: JSON.stringify({
-        event_type: 'sync-shared-data',
-        client_payload: {
-          kind: 'bookmarks',
-          payload: JSON.stringify(items)
-        }
-      }),
-      cache: 'no-store'
-    });
-    if (!response.ok) {
-      throw new Error('共有データの送信に失敗しました。');
+    const text = await file.text();
+    const parsed = JSON.parse(text);
+    if (!Array.isArray(parsed)) {
+      throw new Error('JSON の内容が配列形式ではありません。');
     }
+
+    state.items = parsed.map((item) => ({
+      id: item.id || String(Date.now()),
+      url: item.url || '',
+      title: item.title || '',
+      description: item.description || item.title || '',
+      tags: Array.isArray(item.tags) ? item.tags : [],
+      created: item.created || Date.now(),
+    }));
+
+    saveItems(state.items);
+    render();
+    window.alert('データを読み込みました。');
   } catch (error) {
-    // 共有データの保存に失敗してもローカル保存は残す
+    window.alert(`読み込みに失敗しました: ${error.message}`);
   }
+}
+
+function clearStoredItems() {
+  if (!window.confirm('ローカルデータを削除しますか？')) {
+    return;
+  }
+  state.items = [];
+  saveItems(state.items);
+  render();
 }
 
 async function loadItems() {
-  const sharedItems = await loadSharedItems();
-  if (sharedItems) {
-    state.items = sharedItems;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state.items));
-    return;
-  }
-
   const raw = localStorage.getItem(STORAGE_KEY);
   try {
     state.items = raw ? JSON.parse(raw) : [];
   } catch (error) {
     state.items = [];
   }
-}
-
-async function saveItems(items = state.items) {
-  state.items = items;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state.items));
-  await saveSharedItems(state.items);
 }
 
 function normalizeTag(tag) {
@@ -263,10 +256,33 @@ clearFilterButton.addEventListener('click', () => {
   render();
 });
 
-if (syncSharedButton) {
-  syncSharedButton.addEventListener('click', async () => {
-    await saveItems(state.items);
-    window.alert('共有データに同期しました。');
+if (exportButton) {
+  exportButton.addEventListener('click', () => {
+    void exportItems();
+  });
+}
+
+if (importButton) {
+  importButton.addEventListener('click', () => {
+    if (importFileInput) {
+      importFileInput.click();
+    }
+  });
+}
+
+if (importFileInput) {
+  importFileInput.addEventListener('change', (event) => {
+    const file = event.target.files && event.target.files[0];
+    if (file) {
+      void importItemsFromFile(file);
+    }
+    event.target.value = '';
+  });
+}
+
+if (clearButton) {
+  clearButton.addEventListener('click', () => {
+    clearStoredItems();
   });
 }
 
