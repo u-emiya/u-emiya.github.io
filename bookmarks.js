@@ -1,4 +1,5 @@
 const STORAGE_KEY = 'bookmarkItems';
+const SHARED_DATA_URL = 'https://jsonblob.com/api/jsonBlob/019fc09d-5454-7c00-bfa5-887ae40dd4ef';
 const form = document.getElementById('bookmark-form');
 const urlInput = document.getElementById('bookmark-url');
 const titleInput = document.getElementById('bookmark-title');
@@ -7,13 +8,50 @@ const listContainer = document.getElementById('bookmark-list');
 const tagButtonsContainer = document.getElementById('tag-buttons');
 const filterInput = document.getElementById('tag-filter-input');
 const clearFilterButton = document.getElementById('clear-filter');
+const syncSharedButton = document.getElementById('sync-bookmark-shared');
 
 const state = {
   items: [],
   filterTags: []
 };
 
-function loadItems() {
+async function loadSharedItems() {
+  try {
+    const response = await fetch(SHARED_DATA_URL, { cache: 'no-store' });
+    if (!response.ok) {
+      throw new Error('共有データの読み込みに失敗しました。');
+    }
+    const data = await response.json();
+    if (Array.isArray(data)) {
+      return data;
+    }
+  } catch (error) {
+    // 共有データが取得できない場合はローカル保存にフォールバックする
+  }
+  return null;
+}
+
+async function saveSharedItems(items) {
+  try {
+    await fetch(SHARED_DATA_URL, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(items),
+      cache: 'no-store'
+    });
+  } catch (error) {
+    // 共有データの保存に失敗してもローカル保存は残す
+  }
+}
+
+async function loadItems() {
+  const sharedItems = await loadSharedItems();
+  if (sharedItems) {
+    state.items = sharedItems;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state.items));
+    return;
+  }
+
   const raw = localStorage.getItem(STORAGE_KEY);
   try {
     state.items = raw ? JSON.parse(raw) : [];
@@ -22,8 +60,10 @@ function loadItems() {
   }
 }
 
-function saveItems() {
+async function saveItems(items = state.items) {
+  state.items = items;
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state.items));
+  await saveSharedItems(state.items);
 }
 
 function normalizeTag(tag) {
@@ -161,7 +201,7 @@ function deleteItem(id) {
   render();
 }
 
-function addItem(event) {
+async function addItem(event) {
   event.preventDefault();
 
   const url = urlInput.value.trim();
@@ -182,14 +222,16 @@ function addItem(event) {
     created: Date.now(),
   });
 
-  saveItems();
+  await saveItems();
   form.reset();
   filterInput.value = '';
   state.filterTags = [];
   render();
 }
 
-form.addEventListener('submit', addItem);
+form.addEventListener('submit', (event) => {
+  void addItem(event);
+});
 filterInput.addEventListener('input', () => updateFilterTags(filterInput.value));
 clearFilterButton.addEventListener('click', () => {
   filterInput.value = '';
@@ -197,5 +239,16 @@ clearFilterButton.addEventListener('click', () => {
   render();
 });
 
-loadItems();
-render();
+if (syncSharedButton) {
+  syncSharedButton.addEventListener('click', async () => {
+    await saveItems(state.items);
+    window.alert('共有データに同期しました。');
+  });
+}
+
+async function init() {
+  await loadItems();
+  render();
+}
+
+init();

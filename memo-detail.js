@@ -1,10 +1,48 @@
 const MEMO_STORAGE_KEY = 'memoItems';
+const SHARED_DATA_URL = 'https://jsonblob.com/api/jsonBlob/019fc09c-de12-7719-8912-5c3a423fa2ee';
 const detailContainer = document.getElementById('memo-detail-view');
 const editFormWrapper = document.getElementById('memo-edit-form-wrapper');
 
 function getMemoIdFromQuery() {
   const params = new URLSearchParams(window.location.search);
   return params.get('id');
+}
+
+async function loadSharedItems() {
+  try {
+    const response = await fetch(SHARED_DATA_URL, { cache: 'no-store' });
+    if (!response.ok) {
+      throw new Error('共有データの読み込みに失敗しました。');
+    }
+    const data = await response.json();
+    if (Array.isArray(data)) {
+      return data;
+    }
+  } catch (error) {
+    // 共有データが取得できない場合はローカル保存にフォールバックする
+  }
+  return null;
+}
+
+async function saveSharedItems(items) {
+  try {
+    await fetch(SHARED_DATA_URL, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(items),
+      cache: 'no-store'
+    });
+  } catch (error) {
+    // 共有データの保存に失敗してもローカル保存は残す
+  }
+}
+
+function buildMemoListUrl() {
+  return 'memos.html';
+}
+
+function buildMemoDetailUrl(id) {
+  return `memo-detail.html?id=${encodeURIComponent(id)}`;
 }
 
 function escapeHtml(value) {
@@ -22,7 +60,16 @@ function formatDate(timestamp) {
   return `${date.getFullYear()}/${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getDate()).padStart(2, '0')}`;
 }
 
-function loadMemoItems() {
+async function loadMemoItems() {
+  const sharedItems = await loadSharedItems();
+  if (sharedItems) {
+    return sharedItems.map((item) => ({
+      ...item,
+      tags: Array.isArray(item.tags) ? item.tags : [],
+      imageDataUrl: item.imageDataUrl || ''
+    }));
+  }
+
   const raw = localStorage.getItem(MEMO_STORAGE_KEY);
   try {
     return raw ? JSON.parse(raw) : [];
@@ -31,12 +78,13 @@ function loadMemoItems() {
   }
 }
 
-function saveMemoItems(items) {
+async function saveMemoItems(items) {
   localStorage.setItem(MEMO_STORAGE_KEY, JSON.stringify(items));
+  await saveSharedItems(items);
 }
 
-function renderMemoDetail() {
-  const items = loadMemoItems();
+async function renderMemoDetail() {
+  const items = await loadMemoItems();
   const memoId = getMemoIdFromQuery();
   const item = items.find((memo) => memo.id === memoId);
   let pendingEditImageDataUrl = item && item.imageDataUrl ? item.imageDataUrl : '';
@@ -64,7 +112,7 @@ function renderMemoDetail() {
       <button type="button" id="toggle-edit-button">編集する</button>
     </div>
     <div class="memo-detail-actions memo-detail-footer-actions">
-      <a href="memos.html" class="memo-open">一覧へ戻る</a>
+      <a href="${buildMemoListUrl()}" class="memo-open">一覧へ戻る</a>
     </div>
   `);
 
@@ -134,9 +182,9 @@ function renderMemoDetail() {
     editImagePreview.appendChild(previewImage);
   }
 
-  editForm.addEventListener('submit', (event) => {
+  editForm.addEventListener('submit', async (event) => {
     event.preventDefault();
-    const updatedItems = loadMemoItems().map((memo) => {
+    const updatedItems = (await loadMemoItems()).map((memo) => {
       if (memo.id !== memoId) return memo;
       return {
         ...memo,
@@ -147,14 +195,14 @@ function renderMemoDetail() {
         imageDataUrl: pendingEditImageDataUrl || memo.imageDataUrl || ''
       };
     });
-    saveMemoItems(updatedItems);
-    window.location.href = `memo-detail.html?id=${memoId}`;
+    await saveMemoItems(updatedItems);
+    window.location.href = buildMemoDetailUrl(memoId);
   });
 
-  deleteButton.addEventListener('click', () => {
-    const updatedItems = loadMemoItems().filter((memo) => memo.id !== memoId);
-    saveMemoItems(updatedItems);
-    window.location.href = 'memos.html';
+  deleteButton.addEventListener('click', async () => {
+    const updatedItems = (await loadMemoItems()).filter((memo) => memo.id !== memoId);
+    await saveMemoItems(updatedItems);
+    window.location.href = buildMemoListUrl();
   });
 
   cancelButton.addEventListener('click', () => {
@@ -204,4 +252,4 @@ function renderMemoDetail() {
   renderEditor();
 }
 
-renderMemoDetail();
+void renderMemoDetail();

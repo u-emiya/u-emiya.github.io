@@ -1,4 +1,5 @@
 const MEMO_STORAGE_KEY = 'memoItems';
+const SHARED_DATA_URL = 'https://jsonblob.com/api/jsonBlob/019fc09c-de12-7719-8912-5c3a423fa2ee';
 const memoForm = document.getElementById('memo-form');
 const memoTitleInput = document.getElementById('memo-title');
 const memoContentInput = document.getElementById('memo-content');
@@ -10,6 +11,7 @@ const memoListContainer = document.getElementById('memo-list');
 const memoTagFilterInput = document.getElementById('memo-tag-filter');
 const memoTagButtonsContainer = document.getElementById('memo-tag-buttons');
 const clearMemoFilterButton = document.getElementById('clear-memo-filter');
+const syncSharedButton = document.getElementById('sync-memo-shared');
 
 const memoState = {
   items: [],
@@ -18,7 +20,47 @@ const memoState = {
 
 let pendingImageDataUrl = '';
 
-function loadMemoItems() {
+async function loadSharedItems() {
+  try {
+    const response = await fetch(SHARED_DATA_URL, { cache: 'no-store' });
+    if (!response.ok) {
+      throw new Error('共有データの読み込みに失敗しました。');
+    }
+    const data = await response.json();
+    if (Array.isArray(data)) {
+      return data;
+    }
+  } catch (error) {
+    // 共有データが取得できない場合はローカル保存にフォールバックする
+  }
+  return null;
+}
+
+async function saveSharedItems(items) {
+  try {
+    await fetch(SHARED_DATA_URL, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(items),
+      cache: 'no-store'
+    });
+  } catch (error) {
+    // 共有データの保存に失敗してもローカル保存は残す
+  }
+}
+
+function buildMemoDetailUrl(id) {
+  return `memo-detail.html?id=${encodeURIComponent(id)}`;
+}
+
+async function loadMemoItems() {
+  const sharedItems = await loadSharedItems();
+  if (sharedItems) {
+    memoState.items = sharedItems;
+    localStorage.setItem(MEMO_STORAGE_KEY, JSON.stringify(memoState.items));
+    return;
+  }
+
   const raw = localStorage.getItem(MEMO_STORAGE_KEY);
   try {
     memoState.items = raw ? JSON.parse(raw) : [];
@@ -32,8 +74,9 @@ function loadMemoItems() {
   }));
 }
 
-function saveMemoItems() {
+async function saveMemoItems() {
   localStorage.setItem(MEMO_STORAGE_KEY, JSON.stringify(memoState.items));
+  await saveSharedItems(memoState.items);
 }
 
 function escapeHtml(value) {
@@ -163,7 +206,7 @@ function renderMemoItems() {
     itemEl.innerHTML = `
       <div class="memo-link-card">
         <div>
-          <a href="memo-detail.html?id=${item.id}">${escapeHtml(item.title || '無題のメモ')}</a>
+          <a href="${buildMemoDetailUrl(item.id)}">${escapeHtml(item.title || '無題のメモ')}</a>
           <div class="memo-tags">${item.tags.map((tag) => `<span class="memo-tag-pill">${escapeHtml(tag)}</span>`).join('')}</div>
         </div>
         <div class="memo-actions">
@@ -175,7 +218,7 @@ function renderMemoItems() {
     `;
 
     itemEl.querySelector('.memo-open').addEventListener('click', () => {
-      window.location.href = `memo-detail.html?id=${item.id}`;
+      window.location.href = buildMemoDetailUrl(item.id);
     });
     itemEl.querySelector('.memo-delete').addEventListener('click', () => deleteMemoItem(item.id));
     memoListContainer.appendChild(itemEl);
@@ -186,7 +229,7 @@ function renderMemoItems() {
 
 function deleteMemoItem(id) {
   memoState.items = memoState.items.filter((item) => item.id !== id);
-  saveMemoItems();
+  void saveMemoItems();
   renderMemoItems();
 }
 
@@ -218,7 +261,7 @@ async function addMemoItem(event) {
     created: Date.now(),
   });
 
-  saveMemoItems();
+  await saveMemoItems();
   memoForm.reset();
   clearMemoImagePreview();
   renderMemoItems();
@@ -251,7 +294,9 @@ function handlePaste(event) {
   }
 }
 
-memoForm.addEventListener('submit', addMemoItem);
+memoForm.addEventListener('submit', (event) => {
+  void addMemoItem(event);
+});
 memoForm.addEventListener('paste', handlePaste);
 memoImageInput.addEventListener('change', updateMemoImagePreview);
 memoTagFilterInput.addEventListener('input', () => {
@@ -268,5 +313,16 @@ clearMemoFilterButton.addEventListener('click', () => {
   renderMemoItems();
 });
 
-loadMemoItems();
-renderMemoItems();
+if (syncSharedButton) {
+  syncSharedButton.addEventListener('click', async () => {
+    await saveMemoItems();
+    window.alert('共有データに同期しました。');
+  });
+}
+
+async function init() {
+  await loadMemoItems();
+  renderMemoItems();
+}
+
+init();
