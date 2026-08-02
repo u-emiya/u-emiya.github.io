@@ -1,5 +1,10 @@
 const MEMO_STORAGE_KEY = 'memoItems';
-const SHARED_DATA_URL = 'https://jsonblob.com/api/jsonBlob/019fc09c-de12-7719-8912-5c3a423fa2ee';
+const GITHUB_REPO = 'u-emiya/TestProject';
+const GITHUB_BRANCH = 'main';
+const GITHUB_DATA_PATH = 'HomePage/u-emiya.github.io/shared/memos.json';
+const GITHUB_RAW_URL = `https://raw.githubusercontent.com/${GITHUB_REPO}/${GITHUB_BRANCH}/${GITHUB_DATA_PATH}`;
+const GITHUB_DISPATCH_URL = `https://api.github.com/repos/${GITHUB_REPO}/dispatches`;
+const GITHUB_SYNC_TOKEN = window.GITHUB_SYNC_TOKEN || localStorage.getItem('githubSyncToken') || '';
 const memoForm = document.getElementById('memo-form');
 const memoTitleInput = document.getElementById('memo-title');
 const memoContentInput = document.getElementById('memo-content');
@@ -22,7 +27,7 @@ let pendingImageDataUrl = '';
 
 async function loadSharedItems() {
   try {
-    const response = await fetch(SHARED_DATA_URL, { cache: 'no-store' });
+    const response = await fetch(GITHUB_RAW_URL, { cache: 'no-store' });
     if (!response.ok) {
       throw new Error('共有データの読み込みに失敗しました。');
     }
@@ -37,13 +42,32 @@ async function loadSharedItems() {
 }
 
 async function saveSharedItems(items) {
+  if (!GITHUB_SYNC_TOKEN) {
+    console.warn('GitHub Actions 用のトークンが未設定です。window.GITHUB_SYNC_TOKEN に設定してください。');
+    return;
+  }
+
   try {
-    await fetch(SHARED_DATA_URL, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(items),
+    const response = await fetch(GITHUB_DISPATCH_URL, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/vnd.github+json',
+        'Authorization': `Bearer ${GITHUB_SYNC_TOKEN}`,
+        'Content-Type': 'application/json',
+        'X-GitHub-Api-Version': '2022-11-28'
+      },
+      body: JSON.stringify({
+        event_type: 'sync-shared-data',
+        client_payload: {
+          kind: 'memos',
+          payload: JSON.stringify(items)
+        }
+      }),
       cache: 'no-store'
     });
+    if (!response.ok) {
+      throw new Error('共有データの送信に失敗しました。');
+    }
   } catch (error) {
     // 共有データの保存に失敗してもローカル保存は残す
   }
