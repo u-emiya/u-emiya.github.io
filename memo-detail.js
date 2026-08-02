@@ -4,7 +4,7 @@ const GITHUB_BRANCH = 'main';
 const GITHUB_DATA_PATH = 'HomePage/u-emiya.github.io/shared/memos.json';
 const GITHUB_RAW_URL = `https://raw.githubusercontent.com/${GITHUB_REPO}/${GITHUB_BRANCH}/${GITHUB_DATA_PATH}`;
 const GITHUB_DISPATCH_URL = `https://api.github.com/repos/${GITHUB_REPO}/dispatches`;
-const GITHUB_SYNC_TOKEN = window.GITHUB_SYNC_TOKEN || localStorage.getItem('githubSyncToken') || '';
+const MYSITE_SYNC_TOKEN = window.MYSITE_SYNC_TOKEN || localStorage.getItem('mysiteSyncToken') || '';
 const detailContainer = document.getElementById('memo-detail-view');
 const editFormWrapper = document.getElementById('memo-edit-form-wrapper');
 
@@ -30,8 +30,8 @@ async function loadSharedItems() {
 }
 
 async function saveSharedItems(items) {
-  if (!GITHUB_SYNC_TOKEN) {
-    console.warn('GitHub Actions 用のトークンが未設定です。window.GITHUB_SYNC_TOKEN に設定してください。');
+  if (!MYSITE_SYNC_TOKEN) {
+    console.warn('GitHub Actions 用のトークンが未設定です。window.MYSITE_SYNC_TOKEN に設定してください。');
     return;
   }
 
@@ -40,7 +40,7 @@ async function saveSharedItems(items) {
       method: 'POST',
       headers: {
         'Accept': 'application/vnd.github+json',
-        'Authorization': `Bearer ${GITHUB_SYNC_TOKEN}`,
+        'Authorization': `Bearer ${MYSITE_SYNC_TOKEN}`,
         'Content-Type': 'application/json',
         'X-GitHub-Api-Version': '2022-11-28'
       },

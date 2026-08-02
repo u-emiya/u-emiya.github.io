@@ -10,7 +10,7 @@ jobs:
     permissions:
       contents: write
     env:
-      GH_TOKEN: ${{ secrets.GITHUB_SYNC_TOKEN }}
+      GH_TOKEN: ${{ secrets.MYSITE_SYNC_TOKEN }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
