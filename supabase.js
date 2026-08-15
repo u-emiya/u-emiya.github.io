@@ -1,6 +1,6 @@
 // Supabase client initializer and helper functions
 // Configure these constants with your Supabase project values
-const SUPABASE_URL = 'https://vwwsrdblwjccijorqwip.supabase.co/rest/v1/';
+const SUPABASE_URL = 'https://vwwsrdblwjccijorqwip.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_qxGC8zSyLSpVAbZpamv4Cw_goFvZ9xF';
 
 // Allowlisted emails can write. All other visitors are read-only.
@@ -25,9 +25,10 @@ function initSupabaseClient() {
 
 async function signInWithEmail(email) {
   if (!window.supabaseClient) return { error: new Error('Supabase client not initialized') };
+  const redirectTo = `${window.location.origin}${window.location.pathname}`;
   return window.supabaseClient.auth.signInWithOtp({
     email,
-    options: { emailRedirectTo: window.location.href }
+    options: { emailRedirectTo: redirectTo }
   });
 }
 
