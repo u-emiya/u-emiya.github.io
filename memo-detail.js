@@ -1,4 +1,3 @@
-const MEMO_STORAGE_KEY = 'memoItems';
 const detailContainer = document.getElementById('memo-detail-view');
 const editFormWrapper = document.getElementById('memo-edit-form-wrapper');
 
@@ -30,32 +29,65 @@ function formatDate(timestamp) {
   return `${date.getFullYear()}/${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getDate()).padStart(2, '0')}`;
 }
 
-async function loadMemoItems() {
-  const raw = localStorage.getItem(MEMO_STORAGE_KEY);
-  try {
-    const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed)
-      ? parsed.map((item) => ({
-          ...item,
-          tags: Array.isArray(item.tags) ? item.tags : [],
-          imageDataUrl: item.imageDataUrl || ''
-        }))
-      : [];
-  } catch (error) {
-    return [];
-  }
+function parseTags(value) {
+  return value
+    .split(',')
+    .map((tag) => tag.trim())
+    .filter(Boolean)
+    .reduce((unique, tag) => {
+      const normalized = tag.toLowerCase();
+      if (!unique.some((item) => item.toLowerCase() === normalized)) {
+        unique.push(tag);
+      }
+      return unique;
+    }, []);
 }
 
-async function saveMemoItems(items) {
-  localStorage.setItem(MEMO_STORAGE_KEY, JSON.stringify(items));
+async function fetchMemoById(memoId) {
+  const { data, error } = await window.supabaseClient
+    .from('memos')
+    .select('*')
+    .eq('id', memoId)
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  if (!data) {
+    return null;
+  }
+
+  return {
+    id: String(data.id),
+    title: data.title || '',
+    content: data.content || '',
+    tags: Array.isArray(data.tags) ? data.tags : [],
+    link: data.link || '',
+    imageDataUrl: data.image_data_url || '',
+    created: data.created || Date.now()
+  };
 }
 
 async function renderMemoDetail() {
-  const items = await loadMemoItems();
   const memoId = getMemoIdFromQuery();
-  const item = items.find((memo) => memo.id === memoId);
-  let pendingEditImageDataUrl = item && item.imageDataUrl ? item.imageDataUrl : '';
-  let isEditing = false;
+  if (!memoId) {
+    detailContainer.innerHTML = '<div class="bookmark-empty">メモIDが指定されていません。</div>';
+    editFormWrapper.innerHTML = '';
+    return;
+  }
+
+  let item;
+  try {
+    item = await fetchMemoById(memoId);
+  } catch (error) {
+    detailContainer.innerHTML = `<div class="bookmark-empty">読み込みに失敗しました: ${escapeHtml(error.message)}</div>`;
+    editFormWrapper.innerHTML = '';
+    return;
+  }
+
+  const auth = await window.supabaseHelpers.getAuthContext();
+  const canWrite = auth.canWrite;
 
   if (!item) {
     detailContainer.innerHTML = '<div class="bookmark-empty">指定されたメモは見つかりませんでした。</div>';
@@ -74,33 +106,26 @@ async function renderMemoDetail() {
     </div>
   `;
 
-  detailContainer.insertAdjacentHTML('beforeend', `
-    <div class="memo-detail-actions">
-      <button type="button" id="toggle-edit-button">編集する</button>
-    </div>
+  detailContainer.insertAdjacentHTML(
+    'beforeend',
+    `
     <div class="memo-detail-actions memo-detail-footer-actions">
       <a href="${buildMemoListUrl()}" class="memo-open">一覧へ戻る</a>
     </div>
-  `);
+  `
+  );
 
-  editFormWrapper.innerHTML = '';
+  if (!canWrite) {
+    editFormWrapper.innerHTML = '<p class="memo-helper">このメモは閲覧モードです。編集は管理者のみ可能です。</p>';
+    return;
+  }
 
-  const toggleEditButton = document.getElementById('toggle-edit-button');
-  toggleEditButton.addEventListener('click', () => {
-    isEditing = true;
-    renderEditor();
-  });
+  let pendingEditImageDataUrl = item.imageDataUrl || '';
 
-  function renderEditor() {
-    if (!isEditing) {
-      editFormWrapper.innerHTML = '';
-      return;
-    }
-
-    editFormWrapper.innerHTML = `
-      <div class="bookmark-box">
-        <h3>メモを編集</h3>
-        <form id="memo-edit-form" class="bookmark-form memo-form">
+  editFormWrapper.innerHTML = `
+    <div class="bookmark-box">
+      <h3>メモを編集</h3>
+      <form id="memo-edit-form" class="bookmark-form memo-form">
         <label>
           タイトル
           <input type="text" id="edit-title" value="${escapeHtml(item.title || '')}" required>
@@ -126,7 +151,6 @@ async function renderMemoDetail() {
         <div class="memo-detail-actions">
           <button type="submit">保存する</button>
           <button class="memo-detail-delete" type="button" id="delete-memo-button">削除する</button>
-          <button type="button" id="cancel-edit-button">キャンセル</button>
         </div>
       </form>
     </div>
@@ -140,7 +164,6 @@ async function renderMemoDetail() {
   const editImageInput = document.getElementById('edit-image');
   const editImagePreview = document.getElementById('edit-image-preview');
   const deleteButton = document.getElementById('delete-memo-button');
-  const cancelButton = document.getElementById('cancel-edit-button');
 
   if (item.imageDataUrl) {
     const previewImage = document.createElement('img');
@@ -151,40 +174,48 @@ async function renderMemoDetail() {
 
   editForm.addEventListener('submit', async (event) => {
     event.preventDefault();
-    const updatedItems = (await loadMemoItems()).map((memo) => {
-      if (memo.id !== memoId) return memo;
-      return {
-        ...memo,
+
+    const { error } = await window.supabaseClient.from('memos').upsert(
+      {
+        id: memoId,
         title: editTitleInput.value.trim(),
         content: editContentInput.value.trim(),
-        tags: editTagsInput.value.split(',').map((tag) => tag.trim()).filter(Boolean),
+        tags: parseTags(editTagsInput.value),
         link: editLinkInput.value.trim(),
-        imageDataUrl: pendingEditImageDataUrl || memo.imageDataUrl || ''
-      };
-    });
-    await saveMemoItems(updatedItems);
+        image_data_url: pendingEditImageDataUrl || '',
+        created: item.created
+      },
+      { onConflict: 'id' }
+    );
+
+    if (error) {
+      window.alert('更新に失敗しました: ' + error.message);
+      return;
+    }
+
     window.location.href = buildMemoDetailUrl(memoId);
   });
 
   deleteButton.addEventListener('click', async () => {
-    const updatedItems = (await loadMemoItems()).filter((memo) => memo.id !== memoId);
-    await saveMemoItems(updatedItems);
-    window.location.href = buildMemoListUrl();
-  });
+    const { error } = await window.supabaseClient.from('memos').delete().eq('id', memoId);
+    if (error) {
+      window.alert('削除に失敗しました: ' + error.message);
+      return;
+    }
 
-  cancelButton.addEventListener('click', () => {
-    isEditing = false;
-    renderEditor();
+    window.location.href = buildMemoListUrl();
   });
 
   editForm.addEventListener('paste', (event) => {
     const clipboardItems = event.clipboardData && event.clipboardData.items;
     if (!clipboardItems) return;
-    for (const item of clipboardItems) {
-      if (item.kind === 'file' && item.type.startsWith('image/')) {
+
+    for (const entry of clipboardItems) {
+      if (entry.kind === 'file' && entry.type.startsWith('image/')) {
         event.preventDefault();
-        const file = item.getAsFile();
+        const file = entry.getAsFile();
         if (!file) continue;
+
         const reader = new FileReader();
         reader.onload = () => {
           pendingEditImageDataUrl = reader.result;
@@ -203,6 +234,7 @@ async function renderMemoDetail() {
   editImageInput.addEventListener('change', () => {
     const file = editImageInput.files && editImageInput.files[0];
     if (!file) return;
+
     const reader = new FileReader();
     reader.onload = () => {
       pendingEditImageDataUrl = reader.result;
@@ -214,9 +246,6 @@ async function renderMemoDetail() {
     };
     reader.readAsDataURL(file);
   });
-  }
-
-  renderEditor();
 }
 
 void renderMemoDetail();

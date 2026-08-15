@@ -1,4 +1,3 @@
-const STORAGE_KEY = 'bookmarkItems';
 const form = document.getElementById('bookmark-form');
 const urlInput = document.getElementById('bookmark-url');
 const titleInput = document.getElementById('bookmark-title');
@@ -7,81 +6,18 @@ const listContainer = document.getElementById('bookmark-list');
 const tagButtonsContainer = document.getElementById('tag-buttons');
 const filterInput = document.getElementById('tag-filter-input');
 const clearFilterButton = document.getElementById('clear-filter');
-const exportButton = document.getElementById('export-bookmarks');
-const importButton = document.getElementById('import-bookmarks');
-const clearButton = document.getElementById('clear-bookmarks');
-const importFileInput = document.getElementById('bookmark-import-file');
+
+const loginBtn = document.getElementById('supabase-login');
+const logoutBtn = document.getElementById('supabase-logout');
+const emailInput = document.getElementById('supabase-email');
+const statusEl = document.getElementById('supabase-status');
 
 const state = {
   items: [],
-  filterTags: []
+  filterTags: [],
+  canWrite: false,
+  userEmail: ''
 };
-
-function saveItems(items = state.items) {
-  state.items = items;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state.items));
-}
-
-function downloadJson(filename, payload) {
-  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = filename;
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  URL.revokeObjectURL(url);
-}
-
-async function exportItems() {
-  downloadJson('bookmarks.json', state.items);
-}
-
-async function importItemsFromFile(file) {
-  if (!file) return;
-
-  try {
-    const text = await file.text();
-    const parsed = JSON.parse(text);
-    if (!Array.isArray(parsed)) {
-      throw new Error('JSON の内容が配列形式ではありません。');
-    }
-
-    state.items = parsed.map((item) => ({
-      id: item.id || String(Date.now()),
-      url: item.url || '',
-      title: item.title || '',
-      description: item.description || item.title || '',
-      tags: Array.isArray(item.tags) ? item.tags : [],
-      created: item.created || Date.now(),
-    }));
-
-    saveItems(state.items);
-    render();
-    window.alert('データを読み込みました。');
-  } catch (error) {
-    window.alert(`読み込みに失敗しました: ${error.message}`);
-  }
-}
-
-function clearStoredItems() {
-  if (!window.confirm('ローカルデータを削除しますか？')) {
-    return;
-  }
-  state.items = [];
-  saveItems(state.items);
-  render();
-}
-
-async function loadItems() {
-  const raw = localStorage.getItem(STORAGE_KEY);
-  try {
-    state.items = raw ? JSON.parse(raw) : [];
-  } catch (error) {
-    state.items = [];
-  }
-}
 
 function normalizeTag(tag) {
   return tag.trim();
@@ -137,49 +73,6 @@ function formatDate(timestamp) {
   return `${date.getFullYear()}/${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getDate()).padStart(2, '0')}`;
 }
 
-function render() {
-  const visibleItems = getFilteredItems();
-  listContainer.innerHTML = '';
-
-  if (!visibleItems.length) {
-    const emptyMessage = document.createElement('div');
-    emptyMessage.className = 'bookmark-empty';
-    emptyMessage.textContent = state.filterTags.length
-      ? '絞り込み条件に一致するリンクはありません。'
-      : 'まだリンクが登録されていません。URL とタグを保存してください。';
-    listContainer.appendChild(emptyMessage);
-  } else {
-    visibleItems.forEach((item) => {
-      const itemEl = document.createElement('div');
-      itemEl.className = 'bookmark-item';
-
-      const titleText = item.title || item.url;
-      itemEl.innerHTML = `
-        <div class="bookmark-item-header">
-          <div>
-            <h4>${escapeHtml(titleText)}</h4>
-            <p class="bookmark-url"><a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.url)}</a></p>
-          </div>
-          <button class="bookmark-delete" data-id="${item.id}" type="button">削除</button>
-        </div>
-        <p class="bookmark-description">${escapeHtml(item.description)}</p>
-        <div class="bookmark-meta">
-          <span class="bookmark-date">保存日: ${formatDate(item.created)}</span>
-          <div class="bookmark-tags">${item.tags.map((tag) => `<button class="tag-badge" type="button" data-tag="${escapeHtml(tag)}">${escapeHtml(tag)}</button>`).join('')}</div>
-        </div>
-      `;
-
-      itemEl.querySelector('.bookmark-delete').addEventListener('click', () => deleteItem(item.id));
-      itemEl.querySelectorAll('.tag-badge').forEach((button) => {
-        button.addEventListener('click', () => setFilterTags([button.dataset.tag]));
-      });
-      listContainer.appendChild(itemEl);
-    });
-  }
-
-  renderTagButtons();
-}
-
 function escapeHtml(value) {
   if (!value) return '';
   return value
@@ -212,14 +105,145 @@ function setFilterTags(tags) {
   updateFilterTags(filterInput.value);
 }
 
-function deleteItem(id) {
+function render() {
+  const visibleItems = getFilteredItems();
+  listContainer.innerHTML = '';
+
+  if (!visibleItems.length) {
+    const emptyMessage = document.createElement('div');
+    emptyMessage.className = 'bookmark-empty';
+    emptyMessage.textContent = state.filterTags.length
+      ? '絞り込み条件に一致するリンクはありません。'
+      : 'まだリンクが登録されていません。';
+    listContainer.appendChild(emptyMessage);
+    renderTagButtons();
+    return;
+  }
+
+  visibleItems.forEach((item) => {
+    const itemEl = document.createElement('div');
+    itemEl.className = 'bookmark-item';
+
+    const titleText = item.title || item.url;
+    itemEl.innerHTML = `
+      <div class="bookmark-item-header">
+        <div>
+          <h4>${escapeHtml(titleText)}</h4>
+          <p class="bookmark-url"><a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.url)}</a></p>
+        </div>
+        ${state.canWrite ? `<button class="bookmark-delete" data-id="${item.id}" type="button">削除</button>` : ''}
+      </div>
+      <p class="bookmark-description">${escapeHtml(item.description)}</p>
+      <div class="bookmark-meta">
+        <span class="bookmark-date">保存日: ${formatDate(item.created)}</span>
+        <div class="bookmark-tags">${item.tags.map((tag) => `<button class="tag-badge" type="button" data-tag="${escapeHtml(tag)}">${escapeHtml(tag)}</button>`).join('')}</div>
+      </div>
+    `;
+
+    const deleteButton = itemEl.querySelector('.bookmark-delete');
+    if (deleteButton) {
+      deleteButton.addEventListener('click', () => {
+        void deleteItem(item.id);
+      });
+    }
+
+    itemEl.querySelectorAll('.tag-badge').forEach((button) => {
+      button.addEventListener('click', () => setFilterTags([button.dataset.tag]));
+    });
+
+    listContainer.appendChild(itemEl);
+  });
+
+  renderTagButtons();
+}
+
+function setWriteUiState(canWrite) {
+  form.querySelectorAll('input, button').forEach((el) => {
+    el.disabled = !canWrite;
+  });
+
+  const existingNote = document.getElementById('bookmark-readonly-note');
+  if (!canWrite && !existingNote) {
+    form.insertAdjacentHTML(
+      'beforeend',
+      '<p id="bookmark-readonly-note" class="memo-helper">閲覧モードです。編集できるのは許可された管理者のみです。</p>'
+    );
+  }
+
+  if (canWrite && existingNote) {
+    existingNote.remove();
+  }
+}
+
+async function fetchBookmarksFromSupabase() {
+  if (!window.supabaseClient) {
+    window.alert('Supabase client が初期化されていません。');
+    return;
+  }
+
+  const { data, error } = await window.supabaseClient
+    .from('bookmarks')
+    .select('*')
+    .order('created', { ascending: false });
+
+  if (error) {
+    window.alert('ブックマーク取得に失敗しました: ' + error.message);
+    return;
+  }
+
+  state.items = (data || []).map((row) => ({
+    id: String(row.id),
+    url: row.url || '',
+    title: row.title || '',
+    description: row.description || row.title || '',
+    tags: Array.isArray(row.tags) ? row.tags : [],
+    created: row.created || Date.now()
+  }));
+
+  render();
+}
+
+async function upsertBookmarkToSupabase(item) {
+  const { error } = await window.supabaseClient.from('bookmarks').upsert(
+    {
+      id: item.id,
+      url: item.url,
+      title: item.title,
+      description: item.description,
+      tags: item.tags,
+      created: item.created
+    },
+    { onConflict: 'id' }
+  );
+
+  if (error) {
+    throw error;
+  }
+}
+
+async function deleteItem(id) {
+  if (!state.canWrite) {
+    window.alert('削除権限がありません。');
+    return;
+  }
+
+  const { error } = await window.supabaseClient.from('bookmarks').delete().eq('id', id);
+  if (error) {
+    window.alert('削除に失敗しました: ' + error.message);
+    return;
+  }
+
   state.items = state.items.filter((item) => item.id !== id);
-  saveItems();
   render();
 }
 
 async function addItem(event) {
   event.preventDefault();
+
+  if (!state.canWrite) {
+    window.alert('保存権限がありません。');
+    return;
+  }
 
   const url = urlInput.value.trim();
   const title = titleInput.value.trim();
@@ -230,20 +254,78 @@ async function addItem(event) {
     return;
   }
 
-  state.items.unshift({
-    id: String(Date.now()),
+  const item = {
+    id: crypto.randomUUID(),
     url,
     title,
     description,
     tags,
-    created: Date.now(),
+    created: Date.now()
+  };
+
+  try {
+    await upsertBookmarkToSupabase(item);
+    state.items.unshift(item);
+    form.reset();
+    filterInput.value = '';
+    state.filterTags = [];
+    render();
+  } catch (error) {
+    window.alert('保存に失敗しました: ' + error.message);
+  }
+}
+
+function updateAuthUi() {
+  if (state.userEmail) {
+    statusEl.textContent = state.canWrite
+      ? `管理者ログイン中: ${state.userEmail}`
+      : `閲覧ログイン中: ${state.userEmail}`;
+    loginBtn.style.display = 'none';
+    logoutBtn.style.display = '';
+  } else {
+    statusEl.textContent = '未ログイン（閲覧は可能）';
+    loginBtn.style.display = '';
+    logoutBtn.style.display = 'none';
+  }
+
+  setWriteUiState(state.canWrite);
+}
+
+async function refreshAuthContext() {
+  const authContext = await window.supabaseHelpers.getAuthContext();
+  state.userEmail = authContext.user?.email || '';
+  state.canWrite = authContext.canWrite;
+  updateAuthUi();
+}
+
+function setupSupabaseUi() {
+  if (!loginBtn) return;
+
+  loginBtn.addEventListener('click', async () => {
+    const email = emailInput.value.trim();
+    if (!email) {
+      window.alert('メールアドレスを入力してください。');
+      return;
+    }
+
+    const { error } = await window.supabaseHelpers.signInWithEmail(email);
+    if (error) {
+      window.alert('マジックリンク送信失敗: ' + error.message);
+      return;
+    }
+
+    window.alert('マジックリンクを送信しました。メール内リンクを開いてください。');
   });
 
-  await saveItems();
-  form.reset();
-  filterInput.value = '';
-  state.filterTags = [];
-  render();
+  logoutBtn.addEventListener('click', async () => {
+    await window.supabaseHelpers.signOut();
+    await refreshAuthContext();
+  });
+
+  window.supabaseHelpers.onAuthChange(async () => {
+    await refreshAuthContext();
+    await fetchBookmarksFromSupabase();
+  });
 }
 
 form.addEventListener('submit', (event) => {
@@ -256,118 +338,10 @@ clearFilterButton.addEventListener('click', () => {
   render();
 });
 
-if (exportButton) {
-  exportButton.addEventListener('click', () => {
-    void exportItems();
-  });
-}
-
-if (importButton) {
-  importButton.addEventListener('click', () => {
-    if (importFileInput) {
-      importFileInput.click();
-    }
-  });
-}
-
-if (importFileInput) {
-  importFileInput.addEventListener('change', (event) => {
-    const file = event.target.files && event.target.files[0];
-    if (file) {
-      void importItemsFromFile(file);
-    }
-    event.target.value = '';
-  });
-}
-
-if (clearButton) {
-  clearButton.addEventListener('click', () => {
-    clearStoredItems();
-  });
-}
-
 async function init() {
-  await loadItems();
-  render();
-}
-
-init();
-
-// --- Supabase integration hooks ---
-async function supabaseFetchBookmarks() {
-  if (!window.supabaseClient) { alert('Supabase client が初期化されていません。'); return; }
-  const { data, error } = await window.supabaseClient
-    .from('bookmarks')
-    .select('*')
-    .order('created', { ascending: false });
-  if (error) { alert('取得に失敗しました: ' + error.message); return; }
-  state.items = data.map((r) => ({ id: String(r.id), url: r.url, title: r.title, description: r.description, tags: r.tags || [], created: r.created }));
-  saveItems();
-  render();
-  alert('サーバーからデータを取得しました。');
-}
-
-async function supabaseUploadBookmarks() {
-  if (!window.supabaseClient) { alert('Supabase client が初期化されていません。'); return; }
-  // simple approach: upsert all items (requires a primary key 'id')
-  const payload = state.items.map((item) => ({ id: item.id, url: item.url, title: item.title, description: item.description, tags: item.tags, created: item.created }));
-  const { error } = await window.supabaseClient.from('bookmarks').upsert(payload, { onConflict: 'id' });
-  if (error) { alert('アップロードに失敗しました: ' + error.message); return; }
-  alert('サーバーへアップロードしました。');
-}
-
-function setupSupabaseUi() {
-  const loginBtn = document.getElementById('supabase-login');
-  const logoutBtn = document.getElementById('supabase-logout');
-  const emailInput = document.getElementById('supabase-email');
-  const statusEl = document.getElementById('supabase-status');
-  const downloadBtn = document.getElementById('sync-download-bookmarks');
-  const uploadBtn = document.getElementById('sync-upload-bookmarks');
-
-  if (!loginBtn) return;
-
-  loginBtn.addEventListener('click', async () => {
-    const email = emailInput.value.trim();
-    if (!email) return alert('メールアドレスを入力してください。');
-    const { error } = await window.supabaseHelpers.signInWithEmail(email);
-    if (error) return alert('送信失敗: ' + error.message);
-    alert('マジックリンクを確認してください。ログイン後ページをリロードしてください。');
-  });
-
-  logoutBtn.addEventListener('click', async () => {
-    await window.supabaseHelpers.signOut();
-    statusEl.textContent = '未ログイン';
-    logoutBtn.style.display = 'none';
-    loginBtn.style.display = '';
-  });
-
-  if (downloadBtn) downloadBtn.addEventListener('click', supabaseFetchBookmarks);
-  if (uploadBtn) uploadBtn.addEventListener('click', supabaseUploadBookmarks);
-
-  // auth state
-  if (window.supabaseClient) {
-    window.supabaseClient.auth.getUser().then(({ data }) => {
-      if (data?.user) {
-        statusEl.textContent = 'ログイン済み: ' + data.user.email;
-        logoutBtn.style.display = '';
-        loginBtn.style.display = 'none';
-      }
-    });
-    window.supabaseClient.auth.onAuthStateChange((event, session) => {
-      if (session?.user) {
-        statusEl.textContent = 'ログイン済み: ' + session.user.email;
-        logoutBtn.style.display = '';
-        loginBtn.style.display = 'none';
-      } else {
-        statusEl.textContent = '未ログイン';
-        logoutBtn.style.display = 'none';
-        loginBtn.style.display = '';
-      }
-    });
-  }
-}
-
-// initialize UI when DOM ready
-document.addEventListener('DOMContentLoaded', () => {
   setupSupabaseUi();
-});
+  await refreshAuthContext();
+  await fetchBookmarksFromSupabase();
+}
+
+void init();

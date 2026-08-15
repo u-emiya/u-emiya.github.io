@@ -1,4 +1,3 @@
-const MEMO_STORAGE_KEY = 'memoItems';
 const memoForm = document.getElementById('memo-form');
 const memoTitleInput = document.getElementById('memo-title');
 const memoContentInput = document.getElementById('memo-content');
@@ -10,92 +9,23 @@ const memoListContainer = document.getElementById('memo-list');
 const memoTagFilterInput = document.getElementById('memo-tag-filter');
 const memoTagButtonsContainer = document.getElementById('memo-tag-buttons');
 const clearMemoFilterButton = document.getElementById('clear-memo-filter');
-const exportButton = document.getElementById('export-memos');
-const importButton = document.getElementById('import-memos');
-const clearButton = document.getElementById('clear-memos');
-const importFileInput = document.getElementById('memo-import-file');
+
+const loginBtn = document.getElementById('supabase-login');
+const logoutBtn = document.getElementById('supabase-logout');
+const emailInput = document.getElementById('supabase-email');
+const statusEl = document.getElementById('supabase-status');
 
 const memoState = {
   items: [],
-  filterTags: []
+  filterTags: [],
+  canWrite: false,
+  userEmail: ''
 };
 
 let pendingImageDataUrl = '';
 
 function buildMemoDetailUrl(id) {
   return `memo-detail.html?id=${encodeURIComponent(id)}`;
-}
-
-function downloadJson(filename, payload) {
-  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = filename;
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  URL.revokeObjectURL(url);
-}
-
-async function exportMemoItems() {
-  downloadJson('memos.json', memoState.items);
-}
-
-async function importMemoItemsFromFile(file) {
-  if (!file) return;
-
-  try {
-    const text = await file.text();
-    const parsed = JSON.parse(text);
-    if (!Array.isArray(parsed)) {
-      throw new Error('JSON の内容が配列形式ではありません。');
-    }
-
-    memoState.items = parsed.map((item) => ({
-      id: item.id || String(Date.now()),
-      title: item.title || '',
-      content: item.content || '',
-      tags: Array.isArray(item.tags) ? item.tags : [],
-      link: item.link || '',
-      imageDataUrl: item.imageDataUrl || '',
-      created: item.created || Date.now(),
-    }));
-
-    localStorage.setItem(MEMO_STORAGE_KEY, JSON.stringify(memoState.items));
-    renderMemoItems();
-    window.alert('データを読み込みました。');
-  } catch (error) {
-    window.alert(`読み込みに失敗しました: ${error.message}`);
-  }
-}
-
-function clearStoredMemoItems() {
-  if (!window.confirm('ローカルデータを削除しますか？')) {
-    return;
-  }
-  memoState.items = [];
-  localStorage.setItem(MEMO_STORAGE_KEY, JSON.stringify(memoState.items));
-  renderMemoItems();
-}
-
-async function loadMemoItems() {
-  const raw = localStorage.getItem(MEMO_STORAGE_KEY);
-  try {
-    memoState.items = raw ? JSON.parse(raw) : [];
-  } catch (error) {
-    memoState.items = [];
-  }
-  memoState.items = memoState.items.map((item) => ({
-    ...item,
-    tags: Array.isArray(item.tags) ? item.tags : [],
-    imageDataUrl: item.imageDataUrl || ''
-  }));
-}
-
-async function saveMemoItems(items = memoState.items) {
-  memoState.items = items;
-  localStorage.setItem(MEMO_STORAGE_KEY, JSON.stringify(memoState.items));
 }
 
 function escapeHtml(value) {
@@ -214,8 +144,9 @@ function renderMemoItems() {
     emptyMessage.className = 'bookmark-empty';
     emptyMessage.textContent = memoState.filterTags.length
       ? '絞り込み条件に一致するメモはありません。'
-      : 'まだメモがありません。タイトルと内容を書いて保存してください。';
+      : 'まだメモがありません。';
     memoListContainer.appendChild(emptyMessage);
+    renderTagButtons();
     return;
   }
 
@@ -230,7 +161,7 @@ function renderMemoItems() {
         </div>
         <div class="memo-actions">
           <button class="memo-open" data-id="${item.id}" type="button">開く</button>
-          <button class="memo-delete" data-id="${item.id}" type="button">削除</button>
+          ${memoState.canWrite ? `<button class="memo-delete" data-id="${item.id}" type="button">削除</button>` : ''}
         </div>
       </div>
       <p class="memo-meta">保存日: ${formatDate(item.created)}</p>
@@ -239,21 +170,110 @@ function renderMemoItems() {
     itemEl.querySelector('.memo-open').addEventListener('click', () => {
       window.location.href = buildMemoDetailUrl(item.id);
     });
-    itemEl.querySelector('.memo-delete').addEventListener('click', () => deleteMemoItem(item.id));
+
+    const deleteButton = itemEl.querySelector('.memo-delete');
+    if (deleteButton) {
+      deleteButton.addEventListener('click', () => {
+        void deleteMemoItem(item.id);
+      });
+    }
+
     memoListContainer.appendChild(itemEl);
   });
 
   renderTagButtons();
 }
 
-function deleteMemoItem(id) {
+function setWriteUiState(canWrite) {
+  memoForm.querySelectorAll('input, textarea, button').forEach((el) => {
+    el.disabled = !canWrite;
+  });
+
+  const existingNote = document.getElementById('memo-readonly-note');
+
+  if (!canWrite && !existingNote) {
+    memoForm.insertAdjacentHTML(
+      'beforeend',
+      '<p id="memo-readonly-note" class="memo-helper">閲覧モードです。編集できるのは許可された管理者のみです。</p>'
+    );
+  }
+
+  if (canWrite && existingNote) {
+    existingNote.remove();
+  }
+}
+
+async function fetchMemosFromSupabase() {
+  if (!window.supabaseClient) {
+    window.alert('Supabase client が初期化されていません。');
+    return;
+  }
+
+  const { data, error } = await window.supabaseClient
+    .from('memos')
+    .select('*')
+    .order('created', { ascending: false });
+
+  if (error) {
+    window.alert('メモ取得に失敗しました: ' + error.message);
+    return;
+  }
+
+  memoState.items = (data || []).map((row) => ({
+    id: String(row.id),
+    title: row.title || '',
+    content: row.content || '',
+    tags: Array.isArray(row.tags) ? row.tags : [],
+    link: row.link || '',
+    imageDataUrl: row.image_data_url || '',
+    created: row.created || Date.now()
+  }));
+
+  renderMemoItems();
+}
+
+async function upsertMemoToSupabase(item) {
+  const { error } = await window.supabaseClient.from('memos').upsert(
+    {
+      id: item.id,
+      title: item.title,
+      content: item.content,
+      tags: item.tags,
+      link: item.link,
+      image_data_url: item.imageDataUrl,
+      created: item.created
+    },
+    { onConflict: 'id' }
+  );
+
+  if (error) {
+    throw error;
+  }
+}
+
+async function deleteMemoItem(id) {
+  if (!memoState.canWrite) {
+    window.alert('削除権限がありません。');
+    return;
+  }
+
+  const { error } = await window.supabaseClient.from('memos').delete().eq('id', id);
+  if (error) {
+    window.alert('削除に失敗しました: ' + error.message);
+    return;
+  }
+
   memoState.items = memoState.items.filter((item) => item.id !== id);
-  void saveMemoItems();
   renderMemoItems();
 }
 
 async function addMemoItem(event) {
   event.preventDefault();
+
+  if (!memoState.canWrite) {
+    window.alert('保存権限がありません。');
+    return;
+  }
 
   const title = memoTitleInput.value.trim();
   const content = memoContentInput.value.trim();
@@ -270,96 +290,79 @@ async function addMemoItem(event) {
     imageDataUrl = await readFileAsDataUrl(imageFile);
   }
 
-  memoState.items.unshift({
-    id: String(Date.now()),
+  const newItem = {
+    id: crypto.randomUUID(),
     title,
     content,
     tags,
     link,
     imageDataUrl,
-    created: Date.now(),
-  });
+    created: Date.now()
+  };
 
-  await saveMemoItems();
-  memoForm.reset();
-  clearMemoImagePreview();
-  renderMemoItems();
-}
-// --- Supabase integration for memos ---
-async function supabaseFetchMemos() {
-  if (!window.supabaseClient) { alert('Supabase client が初期化されていません。'); return; }
-  const { data, error } = await window.supabaseClient
-    .from('memos')
-    .select('*')
-    .order('created', { ascending: false });
-  if (error) { alert('取得に失敗しました: ' + error.message); return; }
-  memoState.items = data.map((r) => ({ id: String(r.id), title: r.title, content: r.content, tags: r.tags || [], link: r.link || '', imageDataUrl: r.imageDataUrl || '', created: r.created }));
-  localStorage.setItem(MEMO_STORAGE_KEY, JSON.stringify(memoState.items));
-  render();
-  alert('サーバーからデータを取得しました。');
+  try {
+    await upsertMemoToSupabase(newItem);
+    memoState.items.unshift(newItem);
+    memoForm.reset();
+    clearMemoImagePreview();
+    renderMemoItems();
+  } catch (error) {
+    window.alert('保存に失敗しました: ' + error.message);
+  }
 }
 
-async function supabaseUploadMemos() {
-  if (!window.supabaseClient) { alert('Supabase client が初期化されていません。'); return; }
-  const payload = memoState.items.map((item) => ({ id: item.id, title: item.title, content: item.content, tags: item.tags, link: item.link, imageDataUrl: item.imageDataUrl, created: item.created }));
-  const { error } = await window.supabaseClient.from('memos').upsert(payload, { onConflict: 'id' });
-  if (error) { alert('アップロードに失敗しました: ' + error.message); return; }
-  alert('サーバーへアップロードしました。');
+function updateAuthUi() {
+  if (memoState.userEmail) {
+    statusEl.textContent = memoState.canWrite
+      ? `管理者ログイン中: ${memoState.userEmail}`
+      : `閲覧ログイン中: ${memoState.userEmail}`;
+    loginBtn.style.display = 'none';
+    logoutBtn.style.display = '';
+  } else {
+    statusEl.textContent = '未ログイン（閲覧は可能）';
+    loginBtn.style.display = '';
+    logoutBtn.style.display = 'none';
+  }
+
+  setWriteUiState(memoState.canWrite);
+}
+
+async function refreshAuthContext() {
+  const authContext = await window.supabaseHelpers.getAuthContext();
+  memoState.userEmail = authContext.user?.email || '';
+  memoState.canWrite = authContext.canWrite;
+  updateAuthUi();
 }
 
 function setupSupabaseUiMemos() {
-  const loginBtn = document.getElementById('supabase-login');
-  const logoutBtn = document.getElementById('supabase-logout');
-  const emailInput = document.getElementById('supabase-email');
-  const statusEl = document.getElementById('supabase-status');
-  const downloadBtn = document.getElementById('sync-download-memos');
-  const uploadBtn = document.getElementById('sync-upload-memos');
-
   if (!loginBtn) return;
 
   loginBtn.addEventListener('click', async () => {
     const email = emailInput.value.trim();
-    if (!email) return alert('メールアドレスを入力してください。');
+    if (!email) {
+      window.alert('メールアドレスを入力してください。');
+      return;
+    }
+
     const { error } = await window.supabaseHelpers.signInWithEmail(email);
-    if (error) return alert('送信失敗: ' + error.message);
-    alert('マジックリンクを確認してください。ログイン後ページをリロードしてください。');
+    if (error) {
+      window.alert('マジックリンク送信失敗: ' + error.message);
+      return;
+    }
+
+    window.alert('マジックリンクを送信しました。メール内リンクを開いてください。');
   });
 
   logoutBtn.addEventListener('click', async () => {
     await window.supabaseHelpers.signOut();
-    statusEl.textContent = '未ログイン';
-    logoutBtn.style.display = 'none';
-    loginBtn.style.display = '';
+    await refreshAuthContext();
   });
 
-  if (downloadBtn) downloadBtn.addEventListener('click', supabaseFetchMemos);
-  if (uploadBtn) uploadBtn.addEventListener('click', supabaseUploadMemos);
-
-  if (window.supabaseClient) {
-    window.supabaseClient.auth.getUser().then(({ data }) => {
-      if (data?.user) {
-        statusEl.textContent = 'ログイン済み: ' + data.user.email;
-        logoutBtn.style.display = '';
-        loginBtn.style.display = 'none';
-      }
-    });
-    window.supabaseClient.auth.onAuthStateChange((event, session) => {
-      if (session?.user) {
-        statusEl.textContent = 'ログイン済み: ' + session.user.email;
-        logoutBtn.style.display = '';
-        loginBtn.style.display = 'none';
-      } else {
-        statusEl.textContent = '未ログイン';
-        logoutBtn.style.display = 'none';
-        loginBtn.style.display = '';
-      }
-    });
-  }
+  window.supabaseHelpers.onAuthChange(async () => {
+    await refreshAuthContext();
+    await fetchMemosFromSupabase();
+  });
 }
-
-document.addEventListener('DOMContentLoaded', () => {
-  setupSupabaseUiMemos();
-});
 
 function handlePaste(event) {
   const clipboardItems = event.clipboardData && event.clipboardData.items;
@@ -407,63 +410,10 @@ clearMemoFilterButton.addEventListener('click', () => {
   renderMemoItems();
 });
 
-if (exportButton) {
-  exportButton.addEventListener('click', () => {
-    void exportMemoItems();
-  });
-}
-
-if (importButton) {
-  importButton.addEventListener('click', () => {
-    if (importFileInput) {
-      importFileInput.click();
-    }
-  });
-}
-
-if (importFileInput) {
-  importFileInput.addEventListener('change', (event) => {
-    const file = event.target.files && event.target.files[0];
-    if (file) {
-      void importMemoItemsFromFile(file);
-    }
-    event.target.value = '';
-  });
-}
-
-if (clearButton) {
-  clearButton.addEventListener('click', () => {
-    clearStoredMemoItems();
-  });
-}
-
-if (saveSyncTokenButton) {
-  saveSyncTokenButton.addEventListener('click', () => {
-    saveSyncToken();
-    window.alert('トークンを保存しました。');
-  });
-}
-
-if (clearSyncTokenButton) {
-  clearSyncTokenButton.addEventListener('click', () => {
-    if (syncTokenInput) {
-      syncTokenInput.value = '';
-    }
-    saveSyncToken();
-    window.alert('トークンを削除しました。');
-  });
-}
-
-if (syncSharedButton) {
-  syncSharedButton.addEventListener('click', async () => {
-    await saveMemoItems();
-    window.alert('共有データに同期しました。');
-  });
-}
-
 async function init() {
-  await loadMemoItems();
-  renderMemoItems();
+  setupSupabaseUiMemos();
+  await refreshAuthContext();
+  await fetchMemosFromSupabase();
 }
 
-init();
+void init();
