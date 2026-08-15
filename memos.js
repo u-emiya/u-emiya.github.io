@@ -38,6 +38,18 @@ function escapeHtml(value) {
     .replace(/'/g, '&#39;');
 }
 
+function formatSupabaseError(error) {
+  if (!error) {
+    return '不明なエラーです。';
+  }
+
+  const parts = [error.message || 'エラーメッセージなし'];
+  if (error.code) parts.push(`code=${error.code}`);
+  if (error.details) parts.push(`details=${error.details}`);
+  if (error.hint) parts.push(`hint=${error.hint}`);
+  return parts.join(' | ');
+}
+
 function formatDate(timestamp) {
   const date = new Date(timestamp);
   return `${date.getFullYear()}/${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getDate()).padStart(2, '0')}`;
@@ -215,7 +227,9 @@ async function fetchMemosFromSupabase() {
     .order('created', { ascending: false });
 
   if (error) {
-    window.alert('メモ取得に失敗しました: ' + error.message);
+    const summary = formatSupabaseError(error);
+    console.error('[memos] fetch failed:', error);
+    window.alert('メモ取得に失敗しました: ' + summary);
     return;
   }
 
@@ -233,7 +247,7 @@ async function fetchMemosFromSupabase() {
 }
 
 async function upsertMemoToSupabase(item) {
-  const { error } = await window.supabaseClient.from('memos').upsert(
+  const { data, error } = await window.supabaseClient.from('memos').upsert(
     {
       id: item.id,
       title: item.title,
@@ -244,10 +258,14 @@ async function upsertMemoToSupabase(item) {
       created: item.created
     },
     { onConflict: 'id' }
-  );
+  ).select('id').maybeSingle();
 
   if (error) {
     throw error;
+  }
+
+  if (!data?.id) {
+    throw new Error('保存応答が空でした。RLS またはテーブル設定を確認してください。');
   }
 }
 
@@ -259,7 +277,9 @@ async function deleteMemoItem(id) {
 
   const { error } = await window.supabaseClient.from('memos').delete().eq('id', id);
   if (error) {
-    window.alert('削除に失敗しました: ' + error.message);
+    const summary = formatSupabaseError(error);
+    console.error('[memos] delete failed:', error);
+    window.alert('削除に失敗しました: ' + summary);
     return;
   }
 
@@ -307,7 +327,9 @@ async function addMemoItem(event) {
     clearMemoImagePreview();
     renderMemoItems();
   } catch (error) {
-    window.alert('保存に失敗しました: ' + error.message);
+    console.error('[memos] save failed:', error);
+    const summary = formatSupabaseError(error);
+    window.alert('保存に失敗しました: ' + summary);
   }
 }
 

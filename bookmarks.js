@@ -83,6 +83,18 @@ function escapeHtml(value) {
     .replace(/'/g, '&#39;');
 }
 
+function formatSupabaseError(error) {
+  if (!error) {
+    return '不明なエラーです。';
+  }
+
+  const parts = [error.message || 'エラーメッセージなし'];
+  if (error.code) parts.push(`code=${error.code}`);
+  if (error.details) parts.push(`details=${error.details}`);
+  if (error.hint) parts.push(`hint=${error.hint}`);
+  return parts.join(' | ');
+}
+
 function renderTagButtons() {
   const uniqueTags = getUniqueTags();
   tagButtonsContainer.innerHTML = '';
@@ -187,7 +199,9 @@ async function fetchBookmarksFromSupabase() {
     .order('created', { ascending: false });
 
   if (error) {
-    window.alert('ブックマーク取得に失敗しました: ' + error.message);
+    const summary = formatSupabaseError(error);
+    console.error('[bookmarks] fetch failed:', error);
+    window.alert('ブックマーク取得に失敗しました: ' + summary);
     return;
   }
 
@@ -204,7 +218,7 @@ async function fetchBookmarksFromSupabase() {
 }
 
 async function upsertBookmarkToSupabase(item) {
-  const { error } = await window.supabaseClient.from('bookmarks').upsert(
+  const { data, error } = await window.supabaseClient.from('bookmarks').upsert(
     {
       id: item.id,
       url: item.url,
@@ -214,10 +228,14 @@ async function upsertBookmarkToSupabase(item) {
       created: item.created
     },
     { onConflict: 'id' }
-  );
+  ).select('id').maybeSingle();
 
   if (error) {
     throw error;
+  }
+
+  if (!data?.id) {
+    throw new Error('保存応答が空でした。RLS またはテーブル設定を確認してください。');
   }
 }
 
@@ -229,7 +247,9 @@ async function deleteItem(id) {
 
   const { error } = await window.supabaseClient.from('bookmarks').delete().eq('id', id);
   if (error) {
-    window.alert('削除に失敗しました: ' + error.message);
+    const summary = formatSupabaseError(error);
+    console.error('[bookmarks] delete failed:', error);
+    window.alert('削除に失敗しました: ' + summary);
     return;
   }
 
@@ -271,7 +291,9 @@ async function addItem(event) {
     state.filterTags = [];
     render();
   } catch (error) {
-    window.alert('保存に失敗しました: ' + error.message);
+    console.error('[bookmarks] save failed:', error);
+    const summary = formatSupabaseError(error);
+    window.alert('保存に失敗しました: ' + summary);
   }
 }
 
