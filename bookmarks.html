@@ -61,6 +61,19 @@
       <button id="clear-bookmarks" type="button">ローカルデータを削除</button>
     </div>
     <input type="file" id="bookmark-import-file" accept="application/json">
+    <div class="sync-box">
+      <h4>同期（Supabase）</h4>
+      <div class="auth-ui">
+        <input type="email" id="supabase-email" placeholder="ログインするメールアドレス">
+        <button id="supabase-login" type="button">マジックリンクでログイン</button>
+        <button id="supabase-logout" type="button" style="display:none">ログアウト</button>
+        <div id="supabase-status" class="supabase-status">未ログイン</div>
+      </div>
+      <div class="sync-actions">
+        <button id="sync-download-bookmarks" type="button">サーバーから取得</button>
+        <button id="sync-upload-bookmarks" type="button">サーバーへアップロード</button>
+      </div>
+    </div>
   </div>
   <div class="bookmark-box">
     <h3>タグで絞り込み</h3>
@@ -91,6 +104,11 @@
 </div>
 <footer>© 2010 あなたのホームページ</footer>
 </div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js/dist/umd/supabase.min.js"></script>
+<script src="supabase.js"></script>
+<script>
+  initSupabaseClient();
+</script>
 <script src="bookmarks.js"></script>
 </body>
 </html>

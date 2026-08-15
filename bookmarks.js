@@ -292,3 +292,82 @@ async function init() {
 }
 
 init();
+
+// --- Supabase integration hooks ---
+async function supabaseFetchBookmarks() {
+  if (!window.supabaseClient) { alert('Supabase client が初期化されていません。'); return; }
+  const { data, error } = await window.supabaseClient
+    .from('bookmarks')
+    .select('*')
+    .order('created', { ascending: false });
+  if (error) { alert('取得に失敗しました: ' + error.message); return; }
+  state.items = data.map((r) => ({ id: String(r.id), url: r.url, title: r.title, description: r.description, tags: r.tags || [], created: r.created }));
+  saveItems();
+  render();
+  alert('サーバーからデータを取得しました。');
+}
+
+async function supabaseUploadBookmarks() {
+  if (!window.supabaseClient) { alert('Supabase client が初期化されていません。'); return; }
+  // simple approach: upsert all items (requires a primary key 'id')
+  const payload = state.items.map((item) => ({ id: item.id, url: item.url, title: item.title, description: item.description, tags: item.tags, created: item.created }));
+  const { error } = await window.supabaseClient.from('bookmarks').upsert(payload, { onConflict: 'id' });
+  if (error) { alert('アップロードに失敗しました: ' + error.message); return; }
+  alert('サーバーへアップロードしました。');
+}
+
+function setupSupabaseUi() {
+  const loginBtn = document.getElementById('supabase-login');
+  const logoutBtn = document.getElementById('supabase-logout');
+  const emailInput = document.getElementById('supabase-email');
+  const statusEl = document.getElementById('supabase-status');
+  const downloadBtn = document.getElementById('sync-download-bookmarks');
+  const uploadBtn = document.getElementById('sync-upload-bookmarks');
+
+  if (!loginBtn) return;
+
+  loginBtn.addEventListener('click', async () => {
+    const email = emailInput.value.trim();
+    if (!email) return alert('メールアドレスを入力してください。');
+    const { error } = await window.supabaseHelpers.signInWithEmail(email);
+    if (error) return alert('送信失敗: ' + error.message);
+    alert('マジックリンクを確認してください。ログイン後ページをリロードしてください。');
+  });
+
+  logoutBtn.addEventListener('click', async () => {
+    await window.supabaseHelpers.signOut();
+    statusEl.textContent = '未ログイン';
+    logoutBtn.style.display = 'none';
+    loginBtn.style.display = '';
+  });
+
+  if (downloadBtn) downloadBtn.addEventListener('click', supabaseFetchBookmarks);
+  if (uploadBtn) uploadBtn.addEventListener('click', supabaseUploadBookmarks);
+
+  // auth state
+  if (window.supabaseClient) {
+    window.supabaseClient.auth.getUser().then(({ data }) => {
+      if (data?.user) {
+        statusEl.textContent = 'ログイン済み: ' + data.user.email;
+        logoutBtn.style.display = '';
+        loginBtn.style.display = 'none';
+      }
+    });
+    window.supabaseClient.auth.onAuthStateChange((event, session) => {
+      if (session?.user) {
+        statusEl.textContent = 'ログイン済み: ' + session.user.email;
+        logoutBtn.style.display = '';
+        loginBtn.style.display = 'none';
+      } else {
+        statusEl.textContent = '未ログイン';
+        logoutBtn.style.display = 'none';
+        loginBtn.style.display = '';
+      }
+    });
+  }
+}
+
+// initialize UI when DOM ready
+document.addEventListener('DOMContentLoaded', () => {
+  setupSupabaseUi();
+});

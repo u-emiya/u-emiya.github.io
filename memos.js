@@ -285,6 +285,81 @@ async function addMemoItem(event) {
   clearMemoImagePreview();
   renderMemoItems();
 }
+// --- Supabase integration for memos ---
+async function supabaseFetchMemos() {
+  if (!window.supabaseClient) { alert('Supabase client が初期化されていません。'); return; }
+  const { data, error } = await window.supabaseClient
+    .from('memos')
+    .select('*')
+    .order('created', { ascending: false });
+  if (error) { alert('取得に失敗しました: ' + error.message); return; }
+  memoState.items = data.map((r) => ({ id: String(r.id), title: r.title, content: r.content, tags: r.tags || [], link: r.link || '', imageDataUrl: r.imageDataUrl || '', created: r.created }));
+  localStorage.setItem(MEMO_STORAGE_KEY, JSON.stringify(memoState.items));
+  render();
+  alert('サーバーからデータを取得しました。');
+}
+
+async function supabaseUploadMemos() {
+  if (!window.supabaseClient) { alert('Supabase client が初期化されていません。'); return; }
+  const payload = memoState.items.map((item) => ({ id: item.id, title: item.title, content: item.content, tags: item.tags, link: item.link, imageDataUrl: item.imageDataUrl, created: item.created }));
+  const { error } = await window.supabaseClient.from('memos').upsert(payload, { onConflict: 'id' });
+  if (error) { alert('アップロードに失敗しました: ' + error.message); return; }
+  alert('サーバーへアップロードしました。');
+}
+
+function setupSupabaseUiMemos() {
+  const loginBtn = document.getElementById('supabase-login');
+  const logoutBtn = document.getElementById('supabase-logout');
+  const emailInput = document.getElementById('supabase-email');
+  const statusEl = document.getElementById('supabase-status');
+  const downloadBtn = document.getElementById('sync-download-memos');
+  const uploadBtn = document.getElementById('sync-upload-memos');
+
+  if (!loginBtn) return;
+
+  loginBtn.addEventListener('click', async () => {
+    const email = emailInput.value.trim();
+    if (!email) return alert('メールアドレスを入力してください。');
+    const { error } = await window.supabaseHelpers.signInWithEmail(email);
+    if (error) return alert('送信失敗: ' + error.message);
+    alert('マジックリンクを確認してください。ログイン後ページをリロードしてください。');
+  });
+
+  logoutBtn.addEventListener('click', async () => {
+    await window.supabaseHelpers.signOut();
+    statusEl.textContent = '未ログイン';
+    logoutBtn.style.display = 'none';
+    loginBtn.style.display = '';
+  });
+
+  if (downloadBtn) downloadBtn.addEventListener('click', supabaseFetchMemos);
+  if (uploadBtn) uploadBtn.addEventListener('click', supabaseUploadMemos);
+
+  if (window.supabaseClient) {
+    window.supabaseClient.auth.getUser().then(({ data }) => {
+      if (data?.user) {
+        statusEl.textContent = 'ログイン済み: ' + data.user.email;
+        logoutBtn.style.display = '';
+        loginBtn.style.display = 'none';
+      }
+    });
+    window.supabaseClient.auth.onAuthStateChange((event, session) => {
+      if (session?.user) {
+        statusEl.textContent = 'ログイン済み: ' + session.user.email;
+        logoutBtn.style.display = '';
+        loginBtn.style.display = 'none';
+      } else {
+        statusEl.textContent = '未ログイン';
+        logoutBtn.style.display = 'none';
+        loginBtn.style.display = '';
+      }
+    });
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  setupSupabaseUiMemos();
+});
 
 function handlePaste(event) {
   const clipboardItems = event.clipboardData && event.clipboardData.items;
