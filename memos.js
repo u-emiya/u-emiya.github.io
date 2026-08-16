@@ -437,6 +437,11 @@ clearMemoFilterButton.addEventListener('click', () => {
 });
 
 async function init() {
+  const callbackResult = await window.supabaseHelpers.completeAuthFromUrl();
+  if (callbackResult.error) {
+    window.alert('ログイン処理に失敗しました: ' + callbackResult.error.message);
+  }
+
   setupSupabaseUiMemos();
   await refreshAuthContext();
   await fetchMemosFromSupabase();

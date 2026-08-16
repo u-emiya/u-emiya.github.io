@@ -69,6 +69,11 @@ function setupAuthPage() {
 }
 
 async function init() {
+  const callbackResult = await window.supabaseHelpers.completeAuthFromUrl();
+  if (callbackResult.error) {
+    window.alert('ログイン処理に失敗しました: ' + callbackResult.error.message);
+  }
+
   setupAuthPage();
   await refreshAuthContext();
 }

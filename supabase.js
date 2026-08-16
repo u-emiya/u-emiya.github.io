@@ -37,6 +37,62 @@ async function signOut() {
   return window.supabaseClient.auth.signOut();
 }
 
+function cleanupAuthUrlSearchParams(searchParams) {
+  const removableParams = [
+    'code',
+    'type',
+    'error',
+    'error_code',
+    'error_description'
+  ];
+
+  removableParams.forEach((key) => {
+    searchParams.delete(key);
+  });
+}
+
+async function completeAuthFromUrl() {
+  if (!window.supabaseClient) {
+    return { handled: false, source: '', error: null };
+  }
+
+  const url = new URL(window.location.href);
+  const hash = url.hash.startsWith('#') ? url.hash.slice(1) : '';
+  const hashParams = new URLSearchParams(hash);
+  const accessToken = hashParams.get('access_token');
+  const refreshToken = hashParams.get('refresh_token');
+
+  if (accessToken && refreshToken) {
+    const { error } = await window.supabaseClient.auth.setSession({
+      access_token: accessToken,
+      refresh_token: refreshToken
+    });
+
+    if (!error) {
+      const cleaned = `${url.pathname}${url.search}`;
+      window.history.replaceState({}, document.title, cleaned);
+    }
+
+    return { handled: true, source: 'hash', error: error || null };
+  }
+
+  const code = url.searchParams.get('code');
+  if (code) {
+    const { error } = await window.supabaseClient.auth.exchangeCodeForSession(code);
+
+    if (!error) {
+      cleanupAuthUrlSearchParams(url.searchParams);
+      const search = url.searchParams.toString();
+      const cleaned = `${url.pathname}${search ? `?${search}` : ''}`;
+      window.history.replaceState({}, document.title, cleaned);
+    }
+
+    return { handled: true, source: 'code', error: error || null };
+  }
+
+  return { handled: false, source: '', error: null };
+}
+
 function onAuthChange(handler) {
   if (!window.supabaseClient) return;
   window.supabaseClient.auth.onAuthStateChange((event, session) => handler(event, session));
@@ -60,6 +116,7 @@ window.initSupabaseClient = initSupabaseClient;
 window.supabaseHelpers = {
   signInWithEmail,
   signOut,
+  completeAuthFromUrl,
   onAuthChange,
   getCurrentUser,
   getAuthContext,

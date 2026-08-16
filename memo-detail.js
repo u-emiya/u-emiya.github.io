@@ -248,4 +248,13 @@ async function renderMemoDetail() {
   });
 }
 
-void renderMemoDetail();
+async function init() {
+  const callbackResult = await window.supabaseHelpers.completeAuthFromUrl();
+  if (callbackResult.error) {
+    window.alert('ログイン処理に失敗しました: ' + callbackResult.error.message);
+  }
+
+  await renderMemoDetail();
+}
+
+void init();
