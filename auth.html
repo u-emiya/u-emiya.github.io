@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>ログイン</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="stylesheet" href="index.css">
+</head>
+<body>
+<div id="outer">
+<header>
+  <div id="header-container">
+    <div id="head-inner">
+      <div class="header-top">
+        <h1>My Website</h1>
+        <p class="description">テスト</p>
+      </div>
+      <nav class="header-nav">
+        <a href="index.html">ホーム</a>
+        <a href="memos.html">備忘録</a>
+        <a href="bookmarks.html">ブックマーク</a>
+        <a href="auth.html">ログイン</a>
+      </nav>
+    </div>
+  </div>
+</header>
+<div id="content-wrapper">
+<main>
+<div id="inner">
+<section class="bookmark-section">
+  <div class="bookmark-box">
+    <h3>認証</h3>
+    <div class="auth-ui">
+      <input type="email" id="supabase-email" placeholder="ログインするメールアドレス">
+      <button id="supabase-login" type="button">マジックリンクでログイン</button>
+      <button id="supabase-logout" type="button" style="display:none">ログアウト</button>
+      <div id="supabase-status" class="supabase-status">未ログイン</div>
+    </div>
+  </div>
+</section>
+<section class="bookmark-section">
+  <div class="bookmark-box">
+    <h3>移動先</h3>
+    <div class="tag-filter">
+      <a href="memos.html" class="tag-button">備忘録を開く</a>
+      <a href="bookmarks.html" class="tag-button">ブックマークを開く</a>
+    </div>
+  </div>
+</section>
+</div>
+</main>
+</div>
+<footer>© 2010 あなたのホームページ</footer>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js/dist/umd/supabase.min.js"></script>
+<script src="supabase.js"></script>
+<script>
+  initSupabaseClient();
+</script>
+<script src="auth.js"></script>
+</body>
+</html>
