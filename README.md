@@ -41,10 +41,8 @@ create table if not exists memos (
 
 ## 3. Supabase 側で入れるべきもの（Auth URL 設定）
 
-マジックリンクは「送信時の URL」と「ログイン後の戻り先 URL」が一致していないと失敗します。
-
-このプロジェクトでは `supabase.js` 内で `emailRedirectTo` に現在ページの URL（`origin + pathname`）を渡しています。
-そのため、Supabase 側には「実際にアクセスする URL」を事前登録してください。
+このプロジェクトでは `supabase.js` 内で `emailRedirectTo` を `auth.html` に固定しています。
+そのため、Supabase 側には `auth.html` を Redirect URL として登録してください。
 
 ### 3-1. 入力する場所
 
@@ -70,9 +68,8 @@ create table if not exists memos (
 
 このプロジェクトで許可すべき代表例
 
-- `https://<ユーザー名>.github.io/<リポジトリ名>/memos.html`
-- `https://<ユーザー名>.github.io/<リポジトリ名>/bookmarks.html`
-- `https://<ユーザー名>.github.io/<リポジトリ名>/memo-detail.html`
+- `https://<ユーザー名>.github.io/<リポジトリ名>/auth.html`
+- （独自ドメイン運用時）`https://<独自ドメイン>/auth.html`
 
 運用を簡単にする場合（ワイルドカード許可）
 

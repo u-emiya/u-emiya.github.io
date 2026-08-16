@@ -20,12 +20,20 @@ function isAdminEmail(email) {
 // create client after the Supabase CDN script is loaded
 function initSupabaseClient() {
   if (!window.supabase || window.supabaseClient) return;
-  window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: {
+      // Use implicit flow for magic links so mobile mail app -> browser hops are less likely to fail.
+      flowType: 'implicit',
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true
+    }
+  });
 }
 
 async function signInWithEmail(email) {
   if (!window.supabaseClient) return { error: new Error('Supabase client not initialized') };
-  const redirectTo = `${window.location.origin}${window.location.pathname}`;
+  const redirectTo = new URL('auth.html', window.location.href).toString();
   return window.supabaseClient.auth.signInWithOtp({
     email,
     options: { emailRedirectTo: redirectTo }
@@ -41,6 +49,7 @@ function cleanupAuthUrlSearchParams(searchParams) {
   const removableParams = [
     'code',
     'type',
+    'token_hash',
     'error',
     'error_code',
     'error_description'
@@ -88,6 +97,24 @@ async function completeAuthFromUrl() {
     }
 
     return { handled: true, source: 'code', error: error || null };
+  }
+
+  const tokenHash = url.searchParams.get('token_hash');
+  const type = url.searchParams.get('type');
+  if (tokenHash && type) {
+    const { error } = await window.supabaseClient.auth.verifyOtp({
+      token_hash: tokenHash,
+      type
+    });
+
+    if (!error) {
+      cleanupAuthUrlSearchParams(url.searchParams);
+      const search = url.searchParams.toString();
+      const cleaned = `${url.pathname}${search ? `?${search}` : ''}`;
+      window.history.replaceState({}, document.title, cleaned);
+    }
+
+    return { handled: true, source: 'token_hash', error: error || null };
   }
 
   return { handled: false, source: '', error: null };

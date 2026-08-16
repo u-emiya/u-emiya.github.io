@@ -5,8 +5,26 @@ const statusEl = document.getElementById('supabase-status');
 
 const authState = {
   userEmail: '',
-  canWrite: false
+  canWrite: false,
+  isSubmittingMagicLink: false,
+  magicLinkCooldownUntil: 0
 };
+
+function setMagicLinkButtonState() {
+  if (!loginBtn) return;
+
+  const remainingMs = Math.max(0, authState.magicLinkCooldownUntil - Date.now());
+  const isCoolingDown = remainingMs > 0;
+
+  loginBtn.disabled = authState.isSubmittingMagicLink || isCoolingDown;
+  if (isCoolingDown) {
+    const remainingSeconds = Math.ceil(remainingMs / 1000);
+    loginBtn.textContent = `送信中です (${remainingSeconds}秒待ち)`;
+    return;
+  }
+
+  loginBtn.textContent = 'マジックリンクでログイン';
+}
 
 function updateAuthUi() {
   if (statusEl) {
@@ -46,13 +64,39 @@ function setupAuthPage() {
         return;
       }
 
-      const { error } = await window.supabaseHelpers.signInWithEmail(email);
-      if (error) {
-        window.alert('マジックリンク送信失敗: ' + error.message);
+      if (authState.isSubmittingMagicLink) {
         return;
       }
 
-      window.alert('マジックリンクを送信しました。メール内リンクを開いてください。');
+      const remainingMs = Math.max(0, authState.magicLinkCooldownUntil - Date.now());
+      if (remainingMs > 0) {
+        const remainingSeconds = Math.ceil(remainingMs / 1000);
+        window.alert(`メール送信は制限中です。${remainingSeconds}秒後に再試行してください。`);
+        return;
+      }
+
+      authState.isSubmittingMagicLink = true;
+      setMagicLinkButtonState();
+
+      try {
+        const { error } = await window.supabaseHelpers.signInWithEmail(email);
+        if (error) {
+          const message = error.message || '不明なエラー';
+          if (message.includes('rate limit exceeded') || message.toLowerCase().includes('rate limit')) {
+            authState.magicLinkCooldownUntil = Date.now() + 5 * 60 * 1000;
+            window.alert('短時間にメール送信が多すぎたため、5分間は再送できません。少し待ってから再度お試しください。');
+          } else {
+            window.alert('マジックリンク送信失敗: ' + message);
+          }
+          return;
+        }
+
+        authState.magicLinkCooldownUntil = Date.now() + 60 * 1000;
+        window.alert('マジックリンクを送信しました。メール内リンクを開いてください。');
+      } finally {
+        authState.isSubmittingMagicLink = false;
+        setMagicLinkButtonState();
+      }
     });
   }
 
