@@ -7,11 +7,6 @@ const tagButtonsContainer = document.getElementById('tag-buttons');
 const filterInput = document.getElementById('tag-filter-input');
 const clearFilterButton = document.getElementById('clear-filter');
 
-const loginBtn = document.getElementById('supabase-login');
-const logoutBtn = document.getElementById('supabase-logout');
-const emailInput = document.getElementById('supabase-email');
-const statusEl = document.getElementById('supabase-status');
-
 const state = {
   items: [],
   filterTags: [],
@@ -178,7 +173,7 @@ function setWriteUiState(canWrite) {
   if (!canWrite && !existingNote) {
     form.insertAdjacentHTML(
       'beforeend',
-      '<p id="bookmark-readonly-note" class="memo-helper">閲覧モードです。編集できるのは許可された管理者のみです。</p>'
+      '<p id="bookmark-readonly-note" class="memo-helper">閲覧モード。ログインは <a href="auth.html">認証ページ</a> から行ってください。</p>'
     );
   }
 
@@ -298,16 +293,28 @@ async function addItem(event) {
 }
 
 function updateAuthUi() {
-  if (state.userEmail) {
-    statusEl.textContent = state.canWrite
-      ? `管理者ログイン中: ${state.userEmail}`
-      : `閲覧ログイン中: ${state.userEmail}`;
-    loginBtn.style.display = 'none';
-    logoutBtn.style.display = '';
-  } else {
-    statusEl.textContent = '未ログイン（閲覧は可能）';
-    loginBtn.style.display = '';
-    logoutBtn.style.display = 'none';
+  const statusEl = document.getElementById('supabase-status');
+  const loginBtn = document.getElementById('supabase-login');
+  const logoutBtn = document.getElementById('supabase-logout');
+
+  if (statusEl) {
+    if (state.userEmail) {
+      statusEl.textContent = state.canWrite
+        ? `管理者ログイン中: ${state.userEmail}`
+        : `閲覧ログイン中: ${state.userEmail}`;
+    } else {
+      statusEl.textContent = '未ログイン（閲覧は可能）';
+    }
+  }
+
+  if (loginBtn && logoutBtn) {
+    if (state.userEmail) {
+      loginBtn.style.display = 'none';
+      logoutBtn.style.display = '';
+    } else {
+      loginBtn.style.display = '';
+      logoutBtn.style.display = 'none';
+    }
   }
 
   setWriteUiState(state.canWrite);
@@ -321,29 +328,6 @@ async function refreshAuthContext() {
 }
 
 function setupSupabaseUi() {
-  if (!loginBtn) return;
-
-  loginBtn.addEventListener('click', async () => {
-    const email = emailInput.value.trim();
-    if (!email) {
-      window.alert('メールアドレスを入力してください。');
-      return;
-    }
-
-    const { error } = await window.supabaseHelpers.signInWithEmail(email);
-    if (error) {
-      window.alert('マジックリンク送信失敗: ' + error.message);
-      return;
-    }
-
-    window.alert('マジックリンクを送信しました。メール内リンクを開いてください。');
-  });
-
-  logoutBtn.addEventListener('click', async () => {
-    await window.supabaseHelpers.signOut();
-    await refreshAuthContext();
-  });
-
   window.supabaseHelpers.onAuthChange(async () => {
     await refreshAuthContext();
     await fetchBookmarksFromSupabase();

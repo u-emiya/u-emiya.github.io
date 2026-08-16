@@ -17,12 +17,9 @@
       </div>
       <nav class="header-nav">
         <a href="index.html">ホーム</a>
-        <a href="#about">自己紹介</a>
-        <a href="#schedule">スケジュール</a>
-        <a href="#works">制作物</a>
         <a href="memos.html">備忘録</a>
-        <a href="#contact">コンタクト</a>
         <a href="bookmarks.html">ブックマーク</a>
+        <a href="auth.html">ログイン</a>
       </nav>
     </div>
   </div>
@@ -31,8 +28,6 @@
 <main>
 <div id="inner">
 <h2>リンク保存・タグ管理</h2>
-<p>URL・説明・タグを登録して一覧で管理できます。タグでの絞り込みにも対応しています。</p>
-<p>データは Supabase に保存され、別端末でも同じ内容を参照できます。</p>
 <section class="bookmark-section">
   <div class="bookmark-box">
     <h3>新しいリンクを追加</h3>
@@ -51,19 +46,6 @@
       </label>
       <button type="submit">保存する</button>
     </form>
-  </div>
-  <div class="bookmark-box">
-    <h3>同期と権限</h3>
-    <p>一覧の読み取りは誰でも可能です。書き込みは許可された管理者アカウントのみ可能です。</p>
-    <div class="sync-box">
-      <h4>同期（Supabase）</h4>
-      <div class="auth-ui">
-        <input type="email" id="supabase-email" placeholder="ログインするメールアドレス">
-        <button id="supabase-login" type="button">マジックリンクでログイン</button>
-        <button id="supabase-logout" type="button" style="display:none">ログアウト</button>
-        <div id="supabase-status" class="supabase-status">未ログイン</div>
-      </div>
-    </div>
   </div>
   <div class="bookmark-box">
     <h3>タグで絞り込み</h3>

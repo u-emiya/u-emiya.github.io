@@ -10,11 +10,6 @@ const memoTagFilterInput = document.getElementById('memo-tag-filter');
 const memoTagButtonsContainer = document.getElementById('memo-tag-buttons');
 const clearMemoFilterButton = document.getElementById('clear-memo-filter');
 
-const loginBtn = document.getElementById('supabase-login');
-const logoutBtn = document.getElementById('supabase-logout');
-const emailInput = document.getElementById('supabase-email');
-const statusEl = document.getElementById('supabase-status');
-
 const memoState = {
   items: [],
   filterTags: [],
@@ -206,7 +201,7 @@ function setWriteUiState(canWrite) {
   if (!canWrite && !existingNote) {
     memoForm.insertAdjacentHTML(
       'beforeend',
-      '<p id="memo-readonly-note" class="memo-helper">閲覧モードです。編集できるのは許可された管理者のみです。</p>'
+      '<p id="memo-readonly-note" class="memo-helper">閲覧モード。ログインは <a href="auth.html">認証ページ</a> から行ってください。</p>'
     );
   }
 
@@ -334,16 +329,28 @@ async function addMemoItem(event) {
 }
 
 function updateAuthUi() {
-  if (memoState.userEmail) {
-    statusEl.textContent = memoState.canWrite
-      ? `管理者ログイン中: ${memoState.userEmail}`
-      : `閲覧ログイン中: ${memoState.userEmail}`;
-    loginBtn.style.display = 'none';
-    logoutBtn.style.display = '';
-  } else {
-    statusEl.textContent = '未ログイン（閲覧は可能）';
-    loginBtn.style.display = '';
-    logoutBtn.style.display = 'none';
+  const statusEl = document.getElementById('supabase-status');
+  const loginBtn = document.getElementById('supabase-login');
+  const logoutBtn = document.getElementById('supabase-logout');
+
+  if (statusEl) {
+    if (memoState.userEmail) {
+      statusEl.textContent = memoState.canWrite
+        ? `管理者ログイン中: ${memoState.userEmail}`
+        : `閲覧ログイン中: ${memoState.userEmail}`;
+    } else {
+      statusEl.textContent = '未ログイン（閲覧は可能）';
+    }
+  }
+
+  if (loginBtn && logoutBtn) {
+    if (memoState.userEmail) {
+      loginBtn.style.display = 'none';
+      logoutBtn.style.display = '';
+    } else {
+      loginBtn.style.display = '';
+      logoutBtn.style.display = 'none';
+    }
   }
 
   setWriteUiState(memoState.canWrite);
@@ -357,29 +364,6 @@ async function refreshAuthContext() {
 }
 
 function setupSupabaseUiMemos() {
-  if (!loginBtn) return;
-
-  loginBtn.addEventListener('click', async () => {
-    const email = emailInput.value.trim();
-    if (!email) {
-      window.alert('メールアドレスを入力してください。');
-      return;
-    }
-
-    const { error } = await window.supabaseHelpers.signInWithEmail(email);
-    if (error) {
-      window.alert('マジックリンク送信失敗: ' + error.message);
-      return;
-    }
-
-    window.alert('マジックリンクを送信しました。メール内リンクを開いてください。');
-  });
-
-  logoutBtn.addEventListener('click', async () => {
-    await window.supabaseHelpers.signOut();
-    await refreshAuthContext();
-  });
-
   window.supabaseHelpers.onAuthChange(async () => {
     await refreshAuthContext();
     await fetchMemosFromSupabase();

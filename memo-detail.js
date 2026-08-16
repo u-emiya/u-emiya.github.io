@@ -116,7 +116,7 @@ async function renderMemoDetail() {
   );
 
   if (!canWrite) {
-    editFormWrapper.innerHTML = '<p class="memo-helper">このメモは閲覧モードです。編集は管理者のみ可能です。</p>';
+    editFormWrapper.innerHTML = '<p class="memo-helper">閲覧モード</p>';
     return;
   }
 
