@@ -18,7 +18,11 @@ Supabase を使った同期構成（JSON ファイルなし）
 
 ## 2. テーブル作成
 
+初回作成だけでなく再実行時の安全性も考慮し、`if not exists` と列補完（`add column if not exists`）を併用します。
+
 ```sql
+begin;
+
 create table if not exists bookmarks (
   id text primary key,
   url text not null,
@@ -27,6 +31,11 @@ create table if not exists bookmarks (
   tags text[] not null default '{}',
   created bigint not null
 );
+
+alter table bookmarks add column if not exists title text;
+alter table bookmarks add column if not exists description text;
+alter table bookmarks add column if not exists tags text[] not null default '{}';
+alter table bookmarks add column if not exists created bigint;
 
 create table if not exists memos (
   id text primary key,
@@ -37,6 +46,43 @@ create table if not exists memos (
   image_data_url text,
   created bigint not null
 );
+
+alter table memos add column if not exists title text;
+alter table memos add column if not exists content text;
+alter table memos add column if not exists tags text[] not null default '{}';
+alter table memos add column if not exists link text;
+alter table memos add column if not exists image_data_url text;
+alter table memos add column if not exists created bigint;
+
+create table if not exists manga_bookmarks (
+  id text primary key,
+  url text not null,
+  title text,
+  description text,
+  tags text[] not null default '{}',
+  created bigint not null
+);
+
+alter table manga_bookmarks add column if not exists title text;
+alter table manga_bookmarks add column if not exists description text;
+alter table manga_bookmarks add column if not exists tags text[] not null default '{}';
+alter table manga_bookmarks add column if not exists created bigint;
+
+commit;
+```
+
+### 2-1. 既存データを移行する場合（任意）
+
+以前の実装で `bookmarks` テーブルに「漫画」タグ付きで保存していた場合は、次の SQL で `manga_bookmarks` へ移行できます。
+
+```sql
+insert into manga_bookmarks (id, url, title, description, tags, created)
+select id, url, title, description,
+       coalesce(array_remove(tags, '漫画'), '{}') as tags,
+       created
+from bookmarks
+where '漫画' = any(tags)
+on conflict (id) do nothing;
 ```
 
 ## 3. Supabase 側で入れるべきもの（Auth URL 設定）
@@ -95,28 +141,49 @@ create table if not exists memos (
 ## 4. RLS ポリシー（推奨）
 
 以下の SQL の `admin1@example.com` などを実際の管理者メールに置き換えてください。
+この手順は「再実行しても失敗しにくい差分適用」を目的に、既存 policy を明示的に入れ替える構成にしています。
 
 ```sql
+begin;
+
 alter table bookmarks enable row level security;
 alter table memos enable row level security;
+alter table manga_bookmarks enable row level security;
 
+drop policy if exists "bookmarks_read_all" on bookmarks;
 create policy "bookmarks_read_all"
 on bookmarks for select
 using (true);
 
+drop policy if exists "memos_read_all" on memos;
 create policy "memos_read_all"
 on memos for select
 using (true);
 
+drop policy if exists "manga_bookmarks_read_all" on manga_bookmarks;
+create policy "manga_bookmarks_read_all"
+on manga_bookmarks for select
+using (true);
+
+drop policy if exists "bookmarks_write_admin_only" on bookmarks;
 create policy "bookmarks_write_admin_only"
 on bookmarks for all
 using (auth.jwt() ->> 'email' in ('admin1@example.com', 'admin2@example.com'))
 with check (auth.jwt() ->> 'email' in ('admin1@example.com', 'admin2@example.com'));
 
+drop policy if exists "memos_write_admin_only" on memos;
 create policy "memos_write_admin_only"
 on memos for all
 using (auth.jwt() ->> 'email' in ('admin1@example.com', 'admin2@example.com'))
 with check (auth.jwt() ->> 'email' in ('admin1@example.com', 'admin2@example.com'));
+
+drop policy if exists "manga_bookmarks_write_admin_only" on manga_bookmarks;
+create policy "manga_bookmarks_write_admin_only"
+on manga_bookmarks for all
+using (auth.jwt() ->> 'email' in ('admin1@example.com', 'admin2@example.com'))
+with check (auth.jwt() ->> 'email' in ('admin1@example.com', 'admin2@example.com'));
+
+commit;
 ```
 
 ## 5. ログイン方式について
