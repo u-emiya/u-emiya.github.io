@@ -12,24 +12,6 @@ function normalizeEmail(email) {
   return (email || '').trim().toLowerCase();
 }
 
-function recordAuthDebug(label, payload) {
-  const entry = {
-    ts: new Date().toISOString(),
-    label,
-    payload
-  };
-
-  try {
-    const existing = JSON.parse(localStorage.getItem('supabase-auth-debug') || '[]');
-    existing.push(entry);
-    localStorage.setItem('supabase-auth-debug', JSON.stringify(existing.slice(-20)));
-  } catch (error) {
-    console.warn('[auth-debug] localStorage unavailable', error);
-  }
-
-  console.log('[auth-debug]', label, payload);
-}
-
 function isAdminEmail(email) {
   const normalized = normalizeEmail(email);
   return ADMIN_EMAIL_ALLOWLIST.map(normalizeEmail).includes(normalized);
@@ -52,7 +34,6 @@ function initSupabaseClient() {
 async function signInWithEmail(email) {
   if (!window.supabaseClient) return { error: new Error('Supabase client not initialized') };
   const redirectTo = new URL('auth.html', window.location.href).toString();
-  recordAuthDebug('signInWithEmail', { email, redirectTo, href: window.location.href });
   return window.supabaseClient.auth.signInWithOtp({
     email,
     options: { emailRedirectTo: redirectTo }
@@ -93,16 +74,6 @@ async function completeAuthFromUrl() {
   const tokenHash = url.searchParams.get('token_hash');
   const type = url.searchParams.get('type');
 
-  recordAuthDebug('completeAuthFromUrl:start', {
-    href: window.location.href,
-    hash: hash || null,
-    accessToken: !!accessToken,
-    refreshToken: !!refreshToken,
-    code: !!code,
-    tokenHash: !!tokenHash,
-    type: type || null
-  });
-
   if (accessToken && refreshToken) {
     const { error } = await window.supabaseClient.auth.setSession({
       access_token: accessToken,
@@ -113,8 +84,6 @@ async function completeAuthFromUrl() {
       const cleaned = `${url.pathname}${url.search}`;
       window.history.replaceState({}, document.title, cleaned);
     }
-
-    recordAuthDebug('completeAuthFromUrl:hash', { error: error ? error.message : null });
     return { handled: true, source: 'hash', error: error || null };
   }
 
@@ -127,8 +96,6 @@ async function completeAuthFromUrl() {
       const cleaned = `${url.pathname}${search ? `?${search}` : ''}`;
       window.history.replaceState({}, document.title, cleaned);
     }
-
-    recordAuthDebug('completeAuthFromUrl:code', { error: error ? error.message : null });
     return { handled: true, source: 'code', error: error || null };
   }
 
@@ -144,12 +111,8 @@ async function completeAuthFromUrl() {
       const cleaned = `${url.pathname}${search ? `?${search}` : ''}`;
       window.history.replaceState({}, document.title, cleaned);
     }
-
-    recordAuthDebug('completeAuthFromUrl:token_hash', { type, error: error ? error.message : null });
     return { handled: true, source: 'token_hash', error: error || null };
   }
-
-  recordAuthDebug('completeAuthFromUrl:none', { href: window.location.href });
   return { handled: false, source: '', error: null };
 }
 
@@ -160,30 +123,16 @@ function onAuthChange(handler) {
 
 async function getCurrentUser() {
   if (!window.supabaseClient) return null;
-
-  try {
-    const { data, error } = await window.supabaseClient.auth.getUser();
-    if (error) {
-      recordAuthDebug('getCurrentUser:error', { message: error.message, code: error.code });
-      return null;
-    }
-
-    recordAuthDebug('getCurrentUser:ok', { email: data?.user?.email || null });
-    return data?.user || null;
-  } catch (error) {
-    recordAuthDebug('getCurrentUser:exception', { message: error?.message || String(error) });
-    return null;
-  }
+  const { data } = await window.supabaseClient.auth.getUser();
+  return data?.user || null;
 }
 
 async function getAuthContext() {
   const user = await getCurrentUser();
-  const result = {
+  return {
     user,
     canWrite: isAdminEmail(user?.email)
   };
-  recordAuthDebug('getAuthContext', { email: user?.email || null, canWrite: result.canWrite });
-  return result;
 }
 
 window.initSupabaseClient = initSupabaseClient;

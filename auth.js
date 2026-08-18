@@ -10,13 +10,6 @@ const authState = {
   magicLinkCooldownUntil: 0
 };
 
-function updateDebugPanel(message) {
-  const debugEl = document.getElementById('supabase-debug');
-  if (!debugEl) return;
-  debugEl.style.display = 'block';
-  debugEl.textContent = message;
-}
-
 function setMagicLinkButtonState() {
   if (!loginBtn) return;
 
@@ -30,7 +23,7 @@ function setMagicLinkButtonState() {
     return;
   }
 
-  loginBtn.textContent = 'マジックリンクでログイン';
+  loginBtn.textContent = 'ログイン';
 }
 
 function updateAuthUi() {
@@ -59,8 +52,6 @@ async function refreshAuthContext() {
   const authContext = await window.supabaseHelpers.getAuthContext();
   authState.userEmail = authContext.user?.email || '';
   authState.canWrite = authContext.canWrite;
-  const debugMessage = `email=${authState.userEmail || 'none'}\ncanWrite=${authState.canWrite}\nurl=${window.location.href}`;
-  updateDebugPanel(debugMessage);
   updateAuthUi();
 }
 
@@ -124,10 +115,7 @@ function setupAuthPage() {
 async function init() {
   const callbackResult = await window.supabaseHelpers.completeAuthFromUrl();
   if (callbackResult.error) {
-    updateDebugPanel(`callbackError=${callbackResult.error.message}\nsource=${callbackResult.source}\nurl=${window.location.href}`);
     window.alert('ログイン処理に失敗しました: ' + callbackResult.error.message);
-  } else if (callbackResult.handled) {
-    updateDebugPanel(`callbackHandled=${callbackResult.source}\nurl=${window.location.href}`);
   }
 
   setupAuthPage();
