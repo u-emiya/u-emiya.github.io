@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>漫画ブックマーク</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="stylesheet" href="index.css">
+</head>
+<body>
+<div id="outer">
+<header>
+  <div id="header-container">
+    <div id="head-inner">
+      <div class="header-top">
+        <h1>My Website</h1>
+        <p class="description">テスト</p>
+      </div>
+      <nav class="header-nav">
+        <a href="index.html">ホーム</a>
+        <a href="memos.html">備忘録</a>
+        <a href="bookmarks.html">ブックマーク</a>
+        <a href="manga-bookmarks.html">漫画ブックマーク</a>
+        <a href="auth.html">ログイン</a>
+      </nav>
+    </div>
+  </div>
+</header>
+<div id="content-wrapper">
+<main>
+<div id="inner">
+<h2>漫画ブックマーク</h2>
+<section class="bookmark-section">
+  <div class="bookmark-box">
+    <h3>新しい漫画サイトを追加</h3>
+    <form id="bookmark-form" class="bookmark-form">
+      <label>
+        URL
+        <input type="url" id="bookmark-url" placeholder="https://example.com" required>
+      </label>
+      <label>
+        タイトル / 説明
+        <input type="text" id="bookmark-title" placeholder="サイト名やメモを入力">
+      </label>
+      <label>
+        タグ
+        <input type="text" id="bookmark-tags" placeholder="カンマで区切る (例: 少年, 完結, お気に入り)">
+      </label>
+      <button type="submit">保存する</button>
+    </form>
+  </div>
+  <div class="bookmark-box">
+    <h3>タグで絞り込み</h3>
+    <div class="tag-filter">
+      <input type="text" id="tag-filter-input" placeholder="検索したいタグを入力">
+      <div id="tag-buttons" class="tag-buttons"></div>
+      <button id="clear-filter" type="button">絞り込み解除</button>
+    </div>
+  </div>
+</section>
+<section class="bookmark-section">
+  <h3>保存した漫画サイト一覧</h3>
+  <div id="bookmark-list" class="bookmark-list"></div>
+</section>
+</div>
+</main>
+<aside>
+<div id="middle-inner">
+<div class="side-title">menu</div>
+<div class="side">
+<ul>
+<li>記事ページへのリンク</li>
+<li>記事ページへのリンク</li>
+</ul>
+</div>
+</div>
+</aside>
+</div>
+<footer>© 2010 あなたのホームページ</footer>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js/dist/umd/supabase.min.js"></script>
+<script src="supabase.js"></script>
+<script>
+  initSupabaseClient();
+</script>
+<script src="manga-bookmarks.js"></script>
+</body>
+</html>
