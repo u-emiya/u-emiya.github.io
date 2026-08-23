@@ -2,13 +2,14 @@ const memoForm = document.getElementById('memo-form');
 const memoTitleInput = document.getElementById('memo-title');
 const memoContentInput = document.getElementById('memo-content');
 const memoTagsInput = document.getElementById('memo-tags');
-const memoLinkInput = document.getElementById('memo-link');
 const memoImageInput = document.getElementById('memo-image');
 const memoImagePreview = document.getElementById('memo-image-preview');
 const memoListContainer = document.getElementById('memo-list');
 const memoTagFilterInput = document.getElementById('memo-tag-filter');
 const memoTagButtonsContainer = document.getElementById('memo-tag-buttons');
 const clearMemoFilterButton = document.getElementById('clear-memo-filter');
+const addMemoLinkEntryButton = document.getElementById('add-memo-link-entry');
+const memoRelatedLinksContainer = document.getElementById('memo-related-links-container');
 
 const memoState = {
   items: [],
@@ -82,6 +83,88 @@ function parseTags(value) {
       }
       return unique;
     }, []);
+}
+
+function normalizeRelatedLinks(rawValue) {
+  if (!rawValue) {
+    return [];
+  }
+
+  const list = Array.isArray(rawValue) ? rawValue : [rawValue];
+  return list
+    .map((entry) => {
+      if (!entry || typeof entry !== 'object') {
+        return null;
+      }
+
+      const url = typeof entry.url === 'string' ? entry.url.trim() : '';
+      const description = typeof entry.description === 'string' ? entry.description.trim() : '';
+      if (!url) {
+        return null;
+      }
+
+      return { url, description };
+    })
+    .filter(Boolean);
+}
+
+function buildRelatedLinkEntry(url = '', description = '') {
+  return {
+    url,
+    description
+  };
+}
+
+function getPrimaryMemoLink(links) {
+  if (!Array.isArray(links) || !links.length) {
+    return '';
+  }
+
+  const first = links.find((entry) => entry && typeof entry.url === 'string' && entry.url.trim());
+  return first ? first.url.trim() : '';
+}
+
+function getMemoRelatedLinkInputs() {
+  const rows = memoRelatedLinksContainer.querySelectorAll('.memo-related-link-row');
+  return Array.from(rows)
+    .map((row) => {
+      const urlInput = row.querySelector('.memo-related-link-url');
+      const descriptionInput = row.querySelector('.memo-related-link-description');
+      return {
+        url: urlInput ? urlInput.value.trim() : '',
+        description: descriptionInput ? descriptionInput.value.trim() : ''
+      };
+    })
+    .filter((entry) => entry.url || entry.description);
+}
+
+function renderMemoRelatedLinkInputs(entries = []) {
+  const normalizedEntries = entries.length ? entries : [buildRelatedLinkEntry()];
+  memoRelatedLinksContainer.innerHTML = '';
+
+  normalizedEntries.forEach((entry, index) => {
+    const row = document.createElement('div');
+    row.className = 'memo-related-link-row';
+    row.innerHTML = `
+      <div class="memo-related-link-fields">
+        <input type="url" class="memo-related-link-url" value="${escapeHtml(entry.url || '')}" placeholder="https://example.com">
+        <input type="text" class="memo-related-link-description" value="${escapeHtml(entry.description || '')}" placeholder="説明文（例: 参考記事）">
+      </div>
+      <button type="button" class="memo-related-link-remove" data-index="${index}">削除</button>
+    `;
+
+    const removeButton = row.querySelector('.memo-related-link-remove');
+    removeButton.addEventListener('click', () => {
+      const currentEntries = getMemoRelatedLinkInputs();
+      const nextEntries = currentEntries.filter((_, i) => i !== index);
+      if (!nextEntries.length) {
+        nextEntries.push(buildRelatedLinkEntry());
+      }
+      renderMemoRelatedLinkInputs(nextEntries);
+    });
+
+    memoRelatedLinksContainer.appendChild(row);
+  });
 }
 
 function readFileAsDataUrl(file) {
@@ -180,11 +263,21 @@ function renderMemoItems() {
   visibleItems.forEach((item) => {
     const itemEl = document.createElement('article');
     itemEl.className = 'memo-item';
+    const relatedLinks = normalizeRelatedLinks(item.relatedLinks || (item.link ? [{ url: item.link, description: '' }] : []));
+    const relatedLinkMarkup = relatedLinks.length
+      ? `<div class="memo-link-list">${relatedLinks.map((entry) => `
+          <span class="memo-related-link-item">
+            <a href="${escapeHtml(entry.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(entry.description || entry.url)}</a>
+          </span>
+        `).join('')}</div>`
+      : '';
+
     itemEl.innerHTML = `
       <div class="memo-link-card">
         <div>
           <a href="${buildMemoDetailUrl(item.id)}">${escapeHtml(item.title || '無題のメモ')}</a>
           <div class="memo-tags">${item.tags.map((tag) => `<span class="memo-tag-pill">${escapeHtml(tag)}</span>`).join('')}</div>
+          ${relatedLinkMarkup}
         </div>
         <div class="memo-actions">
           <button class="memo-open" data-id="${item.id}" type="button">開く</button>
@@ -253,7 +346,8 @@ async function fetchMemosFromSupabase() {
     title: row.title || '',
     content: row.content || '',
     tags: Array.isArray(row.tags) ? row.tags : [],
-    link: row.link || '',
+    link: row.link || (Array.isArray(row.related_links) && row.related_links[0] ? row.related_links[0].url : ''),
+    relatedLinks: normalizeRelatedLinks(Array.isArray(row.related_links) ? row.related_links : (row.link ? [{ url: row.link, description: '' }] : [])),
     imageDataUrl: row.image_data_url || '',
     created: row.created || Date.now()
   }));
@@ -268,7 +362,8 @@ async function upsertMemoToSupabase(item) {
       title: item.title,
       content: item.content,
       tags: item.tags,
-      link: item.link,
+      link: item.link || (item.relatedLinks && item.relatedLinks[0] ? item.relatedLinks[0].url : ''),
+      related_links: Array.isArray(item.relatedLinks) ? item.relatedLinks : [],
       image_data_url: item.imageDataUrl,
       created: item.created
     },
@@ -313,7 +408,7 @@ async function addMemoItem(event) {
   const title = memoTitleInput.value.trim();
   const content = memoContentInput.value.trim();
   const tags = parseTags(memoTagsInput.value);
-  const link = memoLinkInput.value.trim();
+  const relatedLinks = getMemoRelatedLinkInputs();
   const imageFile = memoImageInput.files && memoImageInput.files[0] ? memoImageInput.files[0] : null;
 
   if (!title && !content) {
@@ -330,7 +425,8 @@ async function addMemoItem(event) {
     title,
     content,
     tags,
-    link,
+    link: getPrimaryMemoLink(relatedLinks),
+    relatedLinks,
     imageDataUrl,
     created: Date.now()
   };
@@ -339,6 +435,7 @@ async function addMemoItem(event) {
     await upsertMemoToSupabase(newItem);
     memoState.items.unshift(newItem);
     memoForm.reset();
+    renderMemoRelatedLinkInputs([buildRelatedLinkEntry()]);
     clearMemoImagePreview();
     renderMemoItems();
   } catch (error) {
@@ -417,6 +514,12 @@ function handlePaste(event) {
   }
 }
 
+addMemoLinkEntryButton.addEventListener('click', () => {
+  const currentEntries = getMemoRelatedLinkInputs();
+  currentEntries.push(buildRelatedLinkEntry());
+  renderMemoRelatedLinkInputs(currentEntries);
+});
+
 memoForm.addEventListener('submit', (event) => {
   void addMemoItem(event);
 });
@@ -442,6 +545,7 @@ async function init() {
     window.alert('ログイン処理に失敗しました: ' + callbackResult.error.message);
   }
 
+  renderMemoRelatedLinkInputs([buildRelatedLinkEntry()]);
   setupSupabaseUiMemos();
   await refreshAuthContext();
   await fetchMemosFromSupabase();

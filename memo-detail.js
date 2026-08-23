@@ -43,6 +43,85 @@ function parseTags(value) {
     }, []);
 }
 
+function normalizeRelatedLinks(rawValue) {
+  if (!rawValue) {
+    return [];
+  }
+
+  const list = Array.isArray(rawValue) ? rawValue : [rawValue];
+  return list
+    .map((entry) => {
+      if (!entry || typeof entry !== 'object') {
+        return null;
+      }
+
+      const url = typeof entry.url === 'string' ? entry.url.trim() : '';
+      const description = typeof entry.description === 'string' ? entry.description.trim() : '';
+      if (!url) {
+        return null;
+      }
+
+      return { url, description };
+    })
+    .filter(Boolean);
+}
+
+function buildRelatedLinkEntry(url = '', description = '') {
+  return { url, description };
+}
+
+function getPrimaryMemoLink(links) {
+  if (!Array.isArray(links) || !links.length) {
+    return '';
+  }
+
+  const first = links.find((entry) => entry && typeof entry.url === 'string' && entry.url.trim());
+  return first ? first.url.trim() : '';
+}
+
+function getRelatedLinkInputs(container) {
+  const rows = container.querySelectorAll('.memo-related-link-row');
+  return Array.from(rows)
+    .map((row) => {
+      const urlInput = row.querySelector('.memo-related-link-url');
+      const descriptionInput = row.querySelector('.memo-related-link-description');
+      return {
+        url: urlInput ? urlInput.value.trim() : '',
+        description: descriptionInput ? descriptionInput.value.trim() : ''
+      };
+    })
+    .filter((entry) => entry.url || entry.description);
+}
+
+function renderRelatedLinkEditor(container, entries = []) {
+  const normalizedEntries = entries.length ? entries : [buildRelatedLinkEntry()];
+  container.innerHTML = '';
+
+  normalizedEntries.forEach((entry, index) => {
+    const row = document.createElement('div');
+    row.className = 'memo-related-link-row';
+    row.innerHTML = `
+      <div class="memo-related-link-fields">
+        <input type="url" class="memo-related-link-url" value="${escapeHtml(entry.url || '')}" placeholder="https://example.com">
+        <input type="text" class="memo-related-link-description" value="${escapeHtml(entry.description || '')}" placeholder="説明文（例: 参考記事）">
+      </div>
+      <button type="button" class="memo-related-link-remove" data-index="${index}">削除</button>
+    `;
+
+    const removeButton = row.querySelector('.memo-related-link-remove');
+    removeButton.addEventListener('click', () => {
+      const currentEntries = getRelatedLinkInputs(container);
+      const nextEntries = currentEntries.filter((_, i) => i !== index);
+      if (!nextEntries.length) {
+        nextEntries.push(buildRelatedLinkEntry());
+      }
+      renderRelatedLinkEditor(container, nextEntries);
+    });
+
+    container.appendChild(row);
+  });
+}
+
 async function fetchMemoById(memoId) {
   const { data, error } = await window.supabaseClient
     .from('memos')
@@ -63,7 +142,8 @@ async function fetchMemoById(memoId) {
     title: data.title || '',
     content: data.content || '',
     tags: Array.isArray(data.tags) ? data.tags : [],
-    link: data.link || '',
+    link: data.link || (Array.isArray(data.related_links) && data.related_links[0] ? data.related_links[0].url : ''),
+    relatedLinks: normalizeRelatedLinks(Array.isArray(data.related_links) ? data.related_links : (data.link ? [{ url: data.link, description: '' }] : [])),
     imageDataUrl: data.image_data_url || '',
     created: data.created || Date.now()
   };
@@ -95,13 +175,24 @@ async function renderMemoDetail() {
     return;
   }
 
+  const relatedLinks = item.relatedLinks && item.relatedLinks.length
+    ? item.relatedLinks
+    : (item.link ? [{ url: item.link, description: '' }] : []);
+  const relatedLinkMarkup = relatedLinks.length
+    ? `<div class="memo-link-list">${relatedLinks.map((entry) => `
+        <span class="memo-related-link-item">
+          <a href="${escapeHtml(entry.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(entry.description || entry.url)}</a>
+        </span>
+      `).join('')}</div>`
+    : '';
+
   detailContainer.innerHTML = `
     <div class="memo-detail-card">
       <h3>${escapeHtml(item.title || '無題のメモ')}</h3>
       <p class="memo-detail-meta">保存日: ${formatDate(item.created)}</p>
       <div class="memo-tag-list">${(item.tags || []).map((tag) => `<span class="memo-tag-pill">${escapeHtml(tag)}</span>`).join('')}</div>
       <div class="memo-content">${escapeHtml(item.content || '本文はありません。').replace(/\n/g, '<br>')}</div>
-      ${item.link ? `<p class="memo-link"><a href="${escapeHtml(item.link)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.link)}</a></p>` : ''}
+      ${relatedLinkMarkup}
       ${item.imageDataUrl ? `<img class="memo-image" src="${escapeHtml(item.imageDataUrl)}" alt="${escapeHtml(item.title || '添付画像')}" />` : ''}
     </div>
   `;
@@ -138,10 +229,13 @@ async function renderMemoDetail() {
           タグ（任意）
           <input type="text" id="edit-tags" value="${escapeHtml((item.tags || []).join(', '))}">
         </label>
-        <label>
-          関連リンク（任意）
-          <input type="url" id="edit-link" value="${escapeHtml(item.link || '')}">
-        </label>
+        <div class="memo-related-links">
+          <div class="memo-related-links-header">
+            <span>関連リンク（任意）</span>
+            <button type="button" id="add-edit-memo-link-entry" class="secondary-button">追加</button>
+          </div>
+          <div id="memo-edit-related-links-container" class="memo-related-links-container"></div>
+        </div>
         <label>
           画像（任意・ファイルまたは貼り付け可）
           <input type="file" id="edit-image" accept="image/*">
@@ -160,10 +254,18 @@ async function renderMemoDetail() {
   const editTitleInput = document.getElementById('edit-title');
   const editContentInput = document.getElementById('edit-content');
   const editTagsInput = document.getElementById('edit-tags');
-  const editLinkInput = document.getElementById('edit-link');
   const editImageInput = document.getElementById('edit-image');
   const editImagePreview = document.getElementById('edit-image-preview');
+  const editRelatedLinksContainer = document.getElementById('memo-edit-related-links-container');
+  const addEditLinkButton = document.getElementById('add-edit-memo-link-entry');
   const deleteButton = document.getElementById('delete-memo-button');
+
+  renderRelatedLinkEditor(editRelatedLinksContainer, item.relatedLinks && item.relatedLinks.length ? item.relatedLinks : (item.link ? [{ url: item.link, description: '' }] : []));
+  addEditLinkButton.addEventListener('click', () => {
+    const currentEntries = getRelatedLinkInputs(editRelatedLinksContainer);
+    currentEntries.push(buildRelatedLinkEntry());
+    renderRelatedLinkEditor(editRelatedLinksContainer, currentEntries);
+  });
 
   if (item.imageDataUrl) {
     const previewImage = document.createElement('img');
@@ -175,13 +277,15 @@ async function renderMemoDetail() {
   editForm.addEventListener('submit', async (event) => {
     event.preventDefault();
 
+    const relatedLinks = getRelatedLinkInputs(editRelatedLinksContainer);
     const { error } = await window.supabaseClient.from('memos').upsert(
       {
         id: memoId,
         title: editTitleInput.value.trim(),
         content: editContentInput.value.trim(),
         tags: parseTags(editTagsInput.value),
-        link: editLinkInput.value.trim(),
+        link: getPrimaryMemoLink(relatedLinks),
+        related_links: relatedLinks,
         image_data_url: pendingEditImageDataUrl || '',
         created: item.created
       },

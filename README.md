@@ -43,6 +43,7 @@ create table if not exists memos (
   content text,
   tags text[] not null default '{}',
   link text,
+  related_links jsonb not null default '[]'::jsonb,
   image_data_url text,
   created bigint not null
 );
@@ -51,8 +52,19 @@ alter table memos add column if not exists title text;
 alter table memos add column if not exists content text;
 alter table memos add column if not exists tags text[] not null default '{}';
 alter table memos add column if not exists link text;
+alter table memos add column if not exists related_links jsonb not null default '[]'::jsonb;
 alter table memos add column if not exists image_data_url text;
 alter table memos add column if not exists created bigint;
+```
+
+`related_links` は以下のような JSON 配列で保存します。
+
+```json
+[
+  { "url": "https://example.com", "description": "参考記事" },
+  { "url": "https://example.org", "description": "メモの発想源" }
+]
+```
 
 create table if not exists manga_bookmarks (
   id text primary key,

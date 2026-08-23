@@ -45,10 +45,13 @@
         タグ（任意）
         <input type="text" id="memo-tags" placeholder="カンマ区切りで入力 (例: 学習, 仕事)">
       </label>
-      <label>
-        関連リンク（任意）
-        <input type="url" id="memo-link" placeholder="https://example.com">
-      </label>
+      <div class="memo-related-links">
+        <div class="memo-related-links-header">
+          <span>関連リンク（任意）</span>
+          <button type="button" id="add-memo-link-entry" class="secondary-button">追加</button>
+        </div>
+        <div id="memo-related-links-container" class="memo-related-links-container"></div>
+      </div>
       <label>
         画像（任意・ファイルまたは貼り付け可）
         <input type="file" id="memo-image" accept="image/*">
