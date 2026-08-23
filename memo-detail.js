@@ -232,7 +232,7 @@ async function renderMemoDetail() {
         <div class="memo-related-links">
           <div class="memo-related-links-header">
             <span>関連リンク（任意）</span>
-            <button type="button" id="add-edit-memo-link-entry" class="secondary-button">追加</button>
+            <button type="button" id="add-edit-memo-link-entry" class="secondary-button">リンクを追加</button>
           </div>
           <div id="memo-edit-related-links-container" class="memo-related-links-container"></div>
         </div>
