@@ -80,6 +80,20 @@ alter table manga_bookmarks add column if not exists description text;
 alter table manga_bookmarks add column if not exists tags text[] not null default '{}';
 alter table manga_bookmarks add column if not exists created bigint;
 
+create table if not exists gourmet_bookmarks (
+  id text primary key,
+  url text not null,
+  title text,
+  description text,
+  tags text[] not null default '{}',
+  created bigint not null
+);
+
+alter table gourmet_bookmarks add column if not exists title text;
+alter table gourmet_bookmarks add column if not exists description text;
+alter table gourmet_bookmarks add column if not exists tags text[] not null default '{}';
+alter table gourmet_bookmarks add column if not exists created bigint;
+
 commit;
 ```
 
@@ -161,6 +175,7 @@ begin;
 alter table bookmarks enable row level security;
 alter table memos enable row level security;
 alter table manga_bookmarks enable row level security;
+alter table gourmet_bookmarks enable row level security;
 
 drop policy if exists "bookmarks_read_all" on bookmarks;
 create policy "bookmarks_read_all"
@@ -175,6 +190,11 @@ using (true);
 drop policy if exists "manga_bookmarks_read_all" on manga_bookmarks;
 create policy "manga_bookmarks_read_all"
 on manga_bookmarks for select
+using (true);
+
+drop policy if exists "gourmet_bookmarks_read_all" on gourmet_bookmarks;
+create policy "gourmet_bookmarks_read_all"
+on gourmet_bookmarks for select
 using (true);
 
 drop policy if exists "bookmarks_write_admin_only" on bookmarks;
@@ -192,6 +212,12 @@ with check (auth.jwt() ->> 'email' in ('admin1@example.com', 'admin2@example.com
 drop policy if exists "manga_bookmarks_write_admin_only" on manga_bookmarks;
 create policy "manga_bookmarks_write_admin_only"
 on manga_bookmarks for all
+using (auth.jwt() ->> 'email' in ('admin1@example.com', 'admin2@example.com'))
+with check (auth.jwt() ->> 'email' in ('admin1@example.com', 'admin2@example.com'));
+
+drop policy if exists "gourmet_bookmarks_write_admin_only" on gourmet_bookmarks;
+create policy "gourmet_bookmarks_write_admin_only"
+on gourmet_bookmarks for all
 using (auth.jwt() ->> 'email' in ('admin1@example.com', 'admin2@example.com'))
 with check (auth.jwt() ->> 'email' in ('admin1@example.com', 'admin2@example.com'));
 

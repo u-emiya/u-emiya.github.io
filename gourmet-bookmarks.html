@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>漫画ブックマーク</title>
+<title>グルメブックマーク</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="stylesheet" href="index.css">
 </head>
@@ -29,10 +29,10 @@
 <div id="content-wrapper">
 <main>
 <div id="inner">
-<h2>漫画ブックマーク</h2>
+<h2>グルメブックマーク</h2>
 <section class="bookmark-section">
   <div class="bookmark-box">
-    <h3>新しい漫画サイトを追加</h3>
+    <h3>新しいグルメサイトを追加</h3>
     <form id="bookmark-form" class="bookmark-form">
       <label>
         URL
@@ -40,11 +40,11 @@
       </label>
       <label>
         タイトル / 説明
-        <input type="text" id="bookmark-title" placeholder="サイト名やメモを入力">
+        <input type="text" id="bookmark-title" placeholder="お店やレビュー名を入力">
       </label>
       <label>
         タグ
-        <input type="text" id="bookmark-tags" placeholder="カンマで区切る (例: 少年, 完結, お気に入り)">
+        <input type="text" id="bookmark-tags" placeholder="カンマで区切る (例: ラーメン, 東京, 行きたい)">
       </label>
       <button type="submit">保存する</button>
     </form>
@@ -59,7 +59,7 @@
   </div>
 </section>
 <section class="bookmark-section">
-  <h3>保存した漫画サイト一覧</h3>
+  <h3>保存したグルメサイト一覧</h3>
   <div id="bookmark-list" class="bookmark-list"></div>
 </section>
 </div>
@@ -83,6 +83,6 @@
 <script>
   initSupabaseClient();
 </script>
-<script src="manga-bookmarks.js"></script>
+<script src="gourmet-bookmarks.js"></script>
 </body>
 </html>
