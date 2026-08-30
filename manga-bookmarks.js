@@ -11,7 +11,8 @@ const state = {
   items: [],
   filterTags: [],
   canWrite: false,
-  userEmail: ''
+  userEmail: '',
+  editingId: null
 };
 
 function createItemId() {
@@ -158,7 +159,7 @@ function render() {
           <h4>${escapeHtml(titleText)}</h4>
           <p class="bookmark-url"><a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.url)}</a></p>
         </div>
-        ${state.canWrite ? `<button class="bookmark-delete" data-id="${item.id}" type="button">削除</button>` : ''}
+        ${state.canWrite ? `<button class="bookmark-edit" data-id="${item.id}" type="button">編集</button><button class="bookmark-delete" data-id="${item.id}" type="button">削除</button>` : ''}
       </div>
       <p class="bookmark-description">${escapeHtml(item.description)}</p>
       <div class="bookmark-meta">
@@ -166,6 +167,13 @@ function render() {
         <div class="bookmark-tags">${item.tags.map((tag) => `<button class="tag-badge" type="button" data-tag="${escapeHtml(tag)}">${escapeHtml(tag)}</button>`).join('')}</div>
       </div>
     `;
+
+    const editButton = itemEl.querySelector('.bookmark-edit');
+    if (editButton) {
+      editButton.addEventListener('click', () => {
+        startEditItem(item.id);
+      });
+    }
 
     const deleteButton = itemEl.querySelector('.bookmark-delete');
     if (deleteButton) {
@@ -289,19 +297,66 @@ async function addItem(event) {
     return;
   }
 
+function startEditItem(id) {
+  const item = state.items.find((i) => i.id === id);
+  if (!item) return;
+
+  urlInput.value = item.url;
+  titleInput.value = item.title;
+  tagsInput.value = item.tags.join(', ');
+  state.editingId = id;
+
+  const submitButton = form.querySelector('button[type="submit"]');
+  if (submitButton) submitButton.textContent = '更新する';
+
+  form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function cancelEdit() {
+  state.editingId = null;
+  form.reset();
+  const submitButton = form.querySelector('button[type="submit"]');
+  if (submitButton) submitButton.textContent = '保存する';
+}
+
+async function addItem(event) {
+  event.preventDefault();
+
+  if (!state.canWrite) {
+    window.alert('保存権限がありません。');
+    return;
+  }
+
+  const url = urlInput.value.trim();
+  const title = titleInput.value.trim();
+  const description = title;
+  const tags = parseTags(tagsInput.value);
+
+  if (!url) {
+    return;
+  }
+
+  const isEditing = state.editingId !== null;
+  const existingItem = isEditing ? state.items.find((i) => i.id === state.editingId) : null;
+
   const item = {
-    id: createItemId(),
+    id: isEditing ? state.editingId : createItemId(),
     url,
     title,
     description,
     tags,
-    created: Date.now()
+    created: existingItem ? existingItem.created : Date.now()
   };
 
   try {
     await upsertBookmarkToSupabase(item);
-    state.items.unshift(item);
-    form.reset();
+    if (isEditing) {
+      const index = state.items.findIndex((i) => i.id === state.editingId);
+      if (index !== -1) state.items[index] = item;
+    } else {
+      state.items.unshift(item);
+    }
+    cancelEdit();
     filterInput.value = '';
     state.filterTags = [];
     render();

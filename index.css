@@ -560,6 +560,16 @@ footer {
   cursor: pointer;
 }
 
+.bookmark-edit {
+  border: 1px solid #2a7a4b;
+  background: #d9f0e3;
+  color: #1a5c38;
+  border-radius: 6px;
+  padding: 0.65rem 0.9rem;
+  cursor: pointer;
+  margin-right: 0.4rem;
+}
+
 .bookmark-delete {
   border: 1px solid #d33;
   background: #f7d7d7;
