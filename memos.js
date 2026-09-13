@@ -7,6 +7,7 @@ const memoImagePreview = document.getElementById('memo-image-preview');
 const memoListContainer = document.getElementById('memo-list');
 const memoTagFilterInput = document.getElementById('memo-tag-filter');
 const memoTagButtonsContainer = document.getElementById('memo-tag-buttons');
+const memoTagSuggestionsContainer = document.getElementById('memo-tag-suggestions');
 const clearMemoFilterButton = document.getElementById('clear-memo-filter');
 const addMemoLinkEntryButton = document.getElementById('add-memo-link-entry');
 const memoRelatedLinksContainer = document.getElementById('memo-related-links-container');
@@ -222,6 +223,38 @@ function getUniqueMemoTags() {
   return unique.sort((a, b) => a.localeCompare(b, 'ja'));
 }
 
+function appendMemoTag(tag) {
+  const currentTags = parseTags(memoTagsInput.value);
+  if (!currentTags.some((item) => item.toLowerCase() === tag.toLowerCase())) {
+    currentTags.push(tag);
+  }
+  memoTagsInput.value = currentTags.join(', ');
+  memoTagsInput.focus();
+}
+
+function renderMemoTagSuggestions() {
+  if (!memoTagSuggestionsContainer) {
+    return;
+  }
+
+  memoTagSuggestionsContainer.innerHTML = '';
+  const uniqueTags = getUniqueMemoTags();
+
+  if (!uniqueTags.length) {
+    memoTagSuggestionsContainer.textContent = '既存タグはまだありません。';
+    return;
+  }
+
+  uniqueTags.forEach((tag) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'tag-button';
+    button.textContent = tag;
+    button.addEventListener('click', () => appendMemoTag(tag));
+    memoTagSuggestionsContainer.appendChild(button);
+  });
+}
+
 function renderTagButtons() {
   memoTagButtonsContainer.innerHTML = '';
   const uniqueTags = getUniqueMemoTags();
@@ -257,6 +290,7 @@ function renderMemoItems() {
       : 'まだメモがありません。';
     memoListContainer.appendChild(emptyMessage);
     renderTagButtons();
+    renderMemoTagSuggestions();
     return;
   }
 
@@ -302,6 +336,7 @@ function renderMemoItems() {
   });
 
   renderTagButtons();
+  renderMemoTagSuggestions();
 }
 
 function setWriteUiState(canWrite) {

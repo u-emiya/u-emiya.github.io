@@ -4,6 +4,7 @@ const titleInput = document.getElementById('bookmark-title');
 const tagsInput = document.getElementById('bookmark-tags');
 const listContainer = document.getElementById('bookmark-list');
 const tagButtonsContainer = document.getElementById('tag-buttons');
+const tagSuggestionsContainer = document.getElementById('bookmark-tag-suggestions');
 const filterInput = document.getElementById('tag-filter-input');
 const clearFilterButton = document.getElementById('clear-filter');
 
@@ -84,6 +85,37 @@ function getUniqueTags() {
   return unique.sort((a, b) => a.localeCompare(b, 'ja'));
 }
 
+function appendTagToInput(tag) {
+  const currentTags = parseTags(tagsInput.value);
+  if (!currentTags.some((item) => item.toLowerCase() === tag.toLowerCase())) {
+    currentTags.push(tag);
+  }
+  tagsInput.value = currentTags.join(', ');
+  tagsInput.focus();
+}
+
+function renderTagSuggestions() {
+  if (!tagSuggestionsContainer) {
+    return;
+  }
+
+  const uniqueTags = getUniqueTags();
+  tagSuggestionsContainer.innerHTML = '';
+  if (!uniqueTags.length) {
+    tagSuggestionsContainer.textContent = '既存タグはまだありません。';
+    return;
+  }
+
+  uniqueTags.forEach((tag) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'tag-button';
+    button.textContent = tag;
+    button.addEventListener('click', () => appendTagToInput(tag));
+    tagSuggestionsContainer.appendChild(button);
+  });
+}
+
 function formatDate(timestamp) {
   const date = new Date(timestamp);
   return `${date.getFullYear()}/${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getDate()).padStart(2, '0')}`;
@@ -145,6 +177,7 @@ function render() {
       : 'まだリンクが登録されていません。';
     listContainer.appendChild(emptyMessage);
     renderTagButtons();
+    renderTagSuggestions();
     return;
   }
 
@@ -190,6 +223,7 @@ function render() {
   });
 
   renderTagButtons();
+  renderTagSuggestions();
 }
 
 function setWriteUiState(canWrite) {
