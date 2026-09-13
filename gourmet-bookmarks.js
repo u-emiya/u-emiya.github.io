@@ -314,23 +314,6 @@ async function deleteItem(id) {
   render();
 }
 
-async function addItem(event) {
-  event.preventDefault();
-
-  if (!state.canWrite) {
-    window.alert('保存権限がありません。');
-    return;
-  }
-
-  const url = urlInput.value.trim();
-  const title = titleInput.value.trim();
-  const description = title;
-  const tags = parseTags(tagsInput.value);
-
-  if (!url) {
-    return;
-  }
-
 function startEditItem(id) {
   const item = state.items.find((i) => i.id === id);
   if (!item) return;
